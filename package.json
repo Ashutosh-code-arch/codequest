@@ -1,24 +1,35 @@
 {
-  "name": "codequest",
-  "private": true,
-  "scripts": {
-    "build": "turbo run build",
-    "dev": "turbo run dev",
-    "lint": "turbo run lint",
-    "format": "prettier --write \"**/*.{ts,tsx,md}\"",
-    "check-types": "turbo run check-types"
-  },
-  "devDependencies": {
-    "prettier": "^3.5.3",
-    "turbo": "^2.5.0",
-    "typescript": "5.8.2"
-  },
-  "engines": {
-    "node": ">=18"
-  },
-  "packageManager": "npm@10.9.2",
-  "workspaces": [
-    "apps/*",
-    "packages/*"
-  ]
+    "name": "codequest",
+    "private": true,
+    "scripts": {
+        "format": "prettier --write \"**/*.{ts,tsx,md}\"",
+        "check-types": "turbo run check-types",
+        "dev": "turbo run dev",
+        "build": "turbo run build",
+        "start": "turbo run start",
+        "lint": "turbo run lint",
+        "frontend": "turbo run dev --filter=frontend",
+        "backend": "turbo run dev --filter=backend"
+    },
+    "devDependencies": {
+        "@types/node": "^22.14.1",
+        "@types/react": "^19.0.10",
+        "@types/react-dom": "^19.0.4",
+        "@vitejs/plugin-react": "^4.3.4",
+        "eslint": "^9.24.0",
+        "eslint-config-prettier": "^10.1.2",
+        "eslint-plugin-prettier": "^5.2.6",
+        "prettier": "^3.5.3",
+        "turbo": "^2.5.0",
+        "typescript": "^5.8.2",
+        "vite": "^6.3.0"
+    },
+    "engines": {
+        "node": ">=18"
+    },
+    "packageManager": "npm@10.9.2",
+    "workspaces": [
+        "apps/*",
+        "packages/*"
+    ]
 }
