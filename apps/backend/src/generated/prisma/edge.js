@@ -177,11 +177,12 @@ const config = {
     "db"
   ],
   "activeProvider": "mongodb",
+  "postinstall": false,
   "inlineDatasources": {
     "db": {
       "url": {
         "fromEnvVar": "DATABASE_URL",
-        "value": "mongodb+srv://ashutoshk0umar:HirjDheOhu1SrZ0F@cluster0.9pkgrcg.mongodb.net/codequest?retryWrites=true&w=majority"
+        "value": null
       }
     }
   },

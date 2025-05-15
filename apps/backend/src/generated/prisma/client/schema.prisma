@@ -1,0 +1,64 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../src/generated/prisma/client"
+}
+
+datasource db {
+  provider = "mongodb"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id             String            @id @default(cuid()) @map("_id")
+  email          String            @unique
+  password       String
+  createdAt      DateTime          @default(now())
+  // rooms Room[]
+  roomLinks      RoomParticipant[]
+  matchesAsUser1 Match[]           @relation("User1")
+  matchesAsUser2 Match[]           @relation("User2")
+}
+
+model Room {
+  id           String            @id @default(uuid()) @map("_id")
+  name         String
+  isActive     Boolean           @default(true)
+  createdAt    DateTime          @default(now())
+  // participants User[]
+  participants RoomParticipant[]
+  questions    Question[]
+}
+
+model RoomParticipant {
+  id     String @id @default(cuid()) @map("_id")
+  user   User   @relation(fields: [userId], references: [id])
+  userId String
+  room   Room   @relation(fields: [roomId], references: [id])
+  roomId String
+
+  @@unique([userId, roomId]) // Optional: to prevent duplicate entries
+}
+
+model Question {
+  id     String @id @default(uuid()) @map("_id")
+  prompt String
+  answer String
+  room   Room   @relation(fields: [roomId], references: [id])
+  roomId String
+}
+
+model Match {
+  id        String   @id @default(uuid()) @map("_id")
+  user1     User     @relation("User1", fields: [user1Id], references: [id])
+  user1Id   String
+  user2     User     @relation("User2", fields: [user2Id], references: [id])
+  user2Id   String
+  status    String
+  createdAt DateTime @default(now())
+}
