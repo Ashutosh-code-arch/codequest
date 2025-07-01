@@ -10,11 +10,10 @@ export const getMe = async (req: Request, res: Response) => {
         return;
     }
 
-    res.json(user); // ✅ No return statement
+    res.json(user);
 };
 
 export const register = async (req: Request, res: Response) => {
-    console.log("Register Request:", req.body);
     const { email, name, role } = req.body;
     try {
         const user = await prisma.user.upsert({
@@ -22,10 +21,8 @@ export const register = async (req: Request, res: Response) => {
             update: { name },
             create: { email, name, role },
         });
-        console.log("User created:", user);
         res.status(201).json(user);
     } catch (err) {
-        console.error("Register Error:", err);
         res.status(500).json({ error: "Failed to register user" });
     }
 };
