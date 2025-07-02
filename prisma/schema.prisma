@@ -7,6 +7,7 @@
 generator client {
   provider = "prisma-client-js"
 }
+
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
@@ -19,9 +20,37 @@ model User {
   role      Role     @default(CANDIDATE)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  // Relation fields 
+  hostedRooms      CodingRoom[]      @relation("UserHostedRooms")
+  roomParticipants RoomParticipant[]
 }
 
 enum Role {
   MENTOR
   CANDIDATE
+}
+
+model CodingRoom {
+  id           String            @id @default(cuid())
+  title        String
+  language     String            @default("javascript")
+  createdAt    DateTime          @default(now())
+  hostId       String
+  host         User              @relation("UserHostedRooms", fields: [hostId], references: [id])
+  participants RoomParticipant[]
+  isActive     Boolean           @default(true)
+}
+
+model RoomParticipant {
+  id       String   @id @default(cuid())
+  userId   String
+  roomId   String
+  role     Role
+  joinedAt DateTime @default(now())
+
+  user User       @relation(fields: [userId], references: [id])
+  room CodingRoom @relation(fields: [roomId], references: [id])
+
+  @@unique([userId, roomId])
 }
