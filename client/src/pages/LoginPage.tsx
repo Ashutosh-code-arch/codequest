@@ -7,39 +7,74 @@ import {
 } from "firebase/auth";
 import { useNavigate } from "react-router-dom";
 import { Box, Button, Container, TextField, Typography } from "@mui/material";
+import endpoints from "../api/endpoints";
+import axios from "../api/axios";
 
 const LoginPage = () => {
     const navigate = useNavigate();
     const [email, setEmail] = useState("");
     const [password, setPassword] = useState("");
 
+    const registerBackendUser = async (
+        token: string,
+        name: string,
+        email: string
+    ) => {
+        try {
+            const res = await axios.post(
+                endpoints.auth.register,
+                { email, name, role: "CANDIDATE" },
+                {
+                    headers: { Authorization: `Bearer ${token}` },
+                }
+            );
+            console.log("res______", res);
+        } catch (err) {
+            console.error("Backend registration failed", err);
+        }
+    };
+
     const handleLogin = async () => {
-        await signInWithEmailAndPassword(auth, email, password);
+        const result = await signInWithEmailAndPassword(auth, email, password);
+        const user = result.user;
+        const token = await user.getIdToken();
+        // await registerBackendUser(
+        //     token,
+        //     user.displayName || "No Name",
+        //     user.email || ""
+        // );
+        await axios.get(endpoints.auth.me, {
+            headers: { Authorization: `Bearer ${token}` },
+        });
         navigate("/dashboard");
     };
 
     const handleRegister = async () => {
-        await createUserWithEmailAndPassword(auth, email, password);
+        const result = await createUserWithEmailAndPassword(
+            auth,
+            email,
+            password
+        );
+        const user = result.user;
+        const token = await user.getIdToken();
+        await registerBackendUser(
+            token,
+            user.displayName || "No Name",
+            user.email || ""
+        );
         navigate("/dashboard");
     };
 
     const handleGoogleLogin = async () => {
-        try {
-            await signInWithPopup(auth, googleProvider);
-            // const user = result.user;
-            // const idToken = await user.getIdToken();
-
-            // setToken(idToken);
-            // setUserInfo({
-            //     name: user.displayName,
-            //     email: user.email,
-            // });
-
-            // localStorage.setItem("token", idToken);
-            // console.log("ID Token:", idToken);
-        } catch (err) {
-            console.error("Login error:", err);
-        }
+        const result = await signInWithPopup(auth, googleProvider);
+        const user = result.user;
+        const token = await user.getIdToken();
+        await registerBackendUser(
+            token,
+            user.displayName || "No Name",
+            user.email || ""
+        );
+        navigate("/dashboard");
     };
 
     return (
