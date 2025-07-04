@@ -9,6 +9,7 @@ import LoginPage from "./pages/LoginPage";
 import { AuthProvider, useAuth } from "./context/AuthContext";
 import { AppLayout } from "./components/AppLayout";
 import DashboardPage from "./pages/DashboardPage";
+import RoomPage from "./pages/RoomPage";
 
 const ProtectedRoute = ({ children }: { children: JSX.element }) => {
     const { user } = useAuth();
@@ -27,6 +28,16 @@ function App() {
                             <ProtectedRoute>
                                 <AppLayout>
                                     <DashboardPage />
+                                </AppLayout>
+                            </ProtectedRoute>
+                        }
+                    />
+                    <Route
+                        path="/room/:roomId"
+                        element={
+                            <ProtectedRoute>
+                                <AppLayout>
+                                    <RoomPage />
                                 </AppLayout>
                             </ProtectedRoute>
                         }
