@@ -90,7 +90,7 @@ codequest/
 ### 1. Clone & Install
 
 ```bash
-git clone https://github.com/your-username/codequest.git
+git clone https://github.com/Ashutosh-code-arch/codequest.git
 cd codequest
 npm install
 
