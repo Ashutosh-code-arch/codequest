@@ -56,22 +56,30 @@ CodeQuest is a full-stack web platform designed for mock interviews, real-time c
 
 ## 📦 Monorepo Structure
 
+<details> <summary>Click to view</summary>
 codequest/
-├── client/ # React + Vite frontend
-│ └── src/
-│ ├── components/
-│ ├── features/ # Redux slices
-│ ├── pages/
-│ ├── services/ # Axios + custom hooks
-│ └── App.tsx
-├── server/ # Express backend
-│ └── src/
-│ ├── routes/
-│ ├── controllers/
-│ ├── middleware/
-│ ├── socket/ # Socket.IO setup
-│ └── index.ts
-└── README.md
+├── client/                  # React + Vite frontend
+│   └── src/
+│       ├── components/
+│       ├── features/        # Redux slices
+│       ├── pages/
+│       ├── services/        # Axios + API hooks
+│       ├── layouts/
+│       └── App.tsx
+│
+├── server/                  # Express backend
+│   └── src/
+│       ├── controllers/
+│       ├── routes/
+│       ├── middleware/
+│       ├── socket/          # Socket.IO server
+│       └── index.ts
+│
+├── .env                     # Root env (if monorepo)
+├── package.json             # Root (with workspaces)
+├── README.md
+└── tsconfig.json
+</details>
 
 ---
 
