@@ -56,22 +56,32 @@ CodeQuest is a full-stack web platform designed for mock interviews, real-time c
 
 ## 📦 Monorepo Structure
 
+<details> <summary>Click to view</summary>
+
 codequest/
 ├── client/ # React + Vite frontend
 │ └── src/
 │ ├── components/
 │ ├── features/ # Redux slices
 │ ├── pages/
-│ ├── services/ # Axios + custom hooks
+│ ├── services/ # Axios + API hooks
+│ ├── layouts/
 │ └── App.tsx
+│
 ├── server/ # Express backend
 │ └── src/
-│ ├── routes/
 │ ├── controllers/
+│ ├── routes/
 │ ├── middleware/
-│ ├── socket/ # Socket.IO setup
+│ ├── socket/ # Socket.IO server
 │ └── index.ts
-└── README.md
+│
+├── .env # Root env (if monorepo)
+├── package.json # Root (with workspaces)
+├── README.md
+└── tsconfig.json
+
+</details>
 
 ---
 
@@ -80,7 +90,7 @@ codequest/
 ### 1. Clone & Install
 
 ```bash
-git clone https://github.com/your-username/codequest.git
+git clone https://github.com/Ashutosh-code-arch/codequest.git
 cd codequest
 npm install
 

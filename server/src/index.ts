@@ -17,6 +17,7 @@ app.use("/api/auth", authRoutes);
 app.use("/api/rooms", roomRoutes);
 
 const server = http.createServer(app);
+console.log("server________", server);
 const io = initSocketServer(server);
 
 server.listen(PORT, () => {
