@@ -1,34 +1,47 @@
-import { Server as HttpServer } from "http";
 import { Server } from "socket.io";
+import { Server as HTTPServer } from "http";
 
-export const initSocketServer = (server: HttpServer) => {
-    const io = new Server(server, {
+export const initSocketServer = (httpServer: HTTPServer) => {
+    const io = new Server(httpServer, {
         cors: {
-            origin: "*",
+            origin: "http://localhost:5173",
             methods: ["GET", "POST"],
         },
     });
 
     io.on("connection", (socket) => {
-        console.log("New client connected:", socket.id);
+        console.log("🟢 Client connected:", socket.id);
 
-        socket.on("join-room", ({ roomId, user }) => {
+        socket.on("join-room", (data) => {
+            const roomId = data?.roomId;
+            const user = data?.user;
+
+            if (!roomId || !user?.name) {
+                console.warn("⚠️ Invalid join-room payload:", data);
+                socket.emit("error", { message: "Invalid room or user data" });
+                return;
+            }
+
             socket.join(roomId);
-            socket.to(roomId).emit("user-joined", { user });
-            console.log(`${user.name} joined room ${roomId}`);
+            console.log(`✅ ${user.name} (${socket.id}) joined room ${roomId}`);
         });
 
-        socket.on("code-change", ({ roomId, code }) => {
-            socket.to(roomId).emit("code-update", { code });
-        });
-
-        socket.on("leave-room", ({ roomId, user }) => {
+        socket.on("leave-room", (roomId) => {
             socket.leave(roomId);
-            socket.to(roomId).emit("user-left", { user });
+            console.log(`👋 ${socket.id} left room ${roomId}`);
+        });
+
+        socket.on("code-change", (data) => {
+            const { roomId, code } = data || {};
+            if (!roomId || typeof code !== "string") {
+                console.warn("⚠️ Invalid code-change payload:", data);
+                return;
+            }
+            socket.to(roomId).emit("code-change", code);
         });
 
         socket.on("disconnect", () => {
-            console.log("❌ Client disconnected: ", socket.id);
+            console.log("🔴 Client disconnected:", socket.id);
         });
     });
 

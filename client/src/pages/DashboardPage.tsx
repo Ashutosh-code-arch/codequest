@@ -1,12 +1,12 @@
 import { useState } from "react";
 import { Box, Button, Container, TextField, Typography } from "@mui/material";
 import { useNavigate } from "react-router-dom";
-import { io } from "socket.io-client";
+// import { io } from "socket.io-client";
 
 // Socket setup (reuse this in RoomPage later)
-const socket = io("http://localhost:8000", {
-    transports: ["websocket"],
-});
+// const socket = io("http://localhost:8000", {
+//     transports: ["websocket"],
+// });
 
 const DashboardPage = () => {
     const navigate = useNavigate();
@@ -14,22 +14,11 @@ const DashboardPage = () => {
 
     const handleCreateRoom = () => {
         const newRoomId = crypto.randomUUID().slice(0, 8);
-        socket.emit("create-room", newRoomId);
         navigate(`/room/${newRoomId}`);
     };
 
-    // const handleCreateRoom = async () => {
-    //     try {
-    //         const res = await axios.post(endpoints.rooms.create);
-    //         navigate(`/room/${res.data.roomId}`);
-    //     } catch (err) {
-    //         console.error("Failed to create room", err);
-    //     }
-    // };
-
     const handleJoinRoom = () => {
         if (!joinRoomId.trim()) return;
-        socket.emit("join-room", joinRoomId);
         navigate(`/room/${joinRoomId}`);
     };
 
