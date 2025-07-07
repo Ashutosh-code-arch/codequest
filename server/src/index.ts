@@ -10,6 +10,10 @@ dotenv.config();
 const app = express();
 app.use(cors());
 app.use(express.json());
+app.use((req, res, next) => {
+    res.setHeader("Cache-Control", "no-store");
+    next();
+});
 
 const PORT = process.env.PORT || 8000;
 
@@ -17,7 +21,6 @@ app.use("/api/auth", authRoutes);
 app.use("/api/rooms", roomRoutes);
 
 const server = http.createServer(app);
-console.log("server________", server);
 const io = initSocketServer(server);
 
 server.listen(PORT, () => {
