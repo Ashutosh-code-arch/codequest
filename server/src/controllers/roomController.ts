@@ -80,8 +80,9 @@ export const createRoom = async (req: AuthRequest, res: Response) => {
     }
 };
 
-export const joinRoom = async (req: Request, res: Response) => {
+export const joinRoom = async (req: AuthRequest, res: Response) => {
     const { roomId } = req.params;
+    console.log("rooms______", roomId);
     const user = await prisma.user.findUnique({
         where: { email: req.user?.email! },
     });
@@ -111,7 +112,7 @@ export const joinRoom = async (req: Request, res: Response) => {
     }
 };
 
-export const getRoom = async (req: Request, res: Response) => {
+export const getRoom = async (req: AuthRequest, res: Response) => {
     const { roomId } = req.params;
     try {
         const room = await prisma.codingRoom.findUnique({
