@@ -38,9 +38,24 @@ const CodingRoomsPage = () => {
 
     return (
         <Box>
-            <Typography variant="h5" fontWeight="bold" mb={4}>
-                Coding Rooms
-            </Typography>
+            <Box
+                display="flex"
+                justifyContent="space-between"
+                gap={1}
+                width={"100%"}
+            >
+                <Typography
+                    variant="h5"
+                    fontWeight="bold"
+                    alignSelf={"flex-start"}
+                >
+                    Coding Rooms
+                </Typography>
+                <Button color="primary" alignSelf={"flex-end"}>
+                    Create Room
+                </Button>
+            </Box>
+
             <Grid container spacing={2}>
                 {mockRooms.map((room) => (
                     // <Grid item xs={12} sm={6} md={4} key={room.id}>
