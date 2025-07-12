@@ -1,13 +1,13 @@
-import {
-    Box,
-    Typography,
-    Grid,
-    Card,
-    CardContent,
-    Button,
-} from "@mui/material";
+import { Box, Typography, Grid, Button, TextField } from "@mui/material";
 import CodingRoomCard from "../components/rooms/CodingRoomCard";
 import { useNavigate } from "react-router-dom";
+
+interface Room {
+    id: string;
+    title: string;
+    host: string;
+    status: string;
+}
 
 const mockRooms = [
     {
@@ -32,7 +32,7 @@ const mockRooms = [
 
 const CodingRoomsPage = () => {
     const navigate = useNavigate();
-    function joinRoom(room: any) {
+    function joinRoom(room: Room) {
         navigate(`/room/${room.id}`);
     }
 
@@ -51,9 +51,24 @@ const CodingRoomsPage = () => {
                 >
                     Coding Rooms
                 </Typography>
-                <Button color="primary" alignSelf={"flex-end"}>
-                    Create Room
-                </Button>
+
+                <Box display="flex" justifyContent="space-between" gap={1}>
+                    <TextField placeholder="room id" variant="standard" />
+                    <Button
+                        color="primary"
+                        sx={{ alignSelf: "flex-end" }}
+                        variant="contained"
+                    >
+                        Join Room
+                    </Button>
+                    <Button
+                        color="primary"
+                        sx={{ alignSelf: "flex-end" }}
+                        variant="contained"
+                    >
+                        Create Room
+                    </Button>
+                </Box>
             </Box>
 
             <Grid container spacing={2}>
@@ -83,12 +98,12 @@ const CodingRoomsPage = () => {
                     //         </CardContent>
                     //     </Card>
                     // </Grid>
-                    <Grid item xs={12} sm={6} md={4} key={room.id}>
+                    <Grid key={room.id} sx={{ xs: 12, sm: 6, md: 4 }}>
                         <CodingRoomCard
                             title={room.title}
                             host={room.host}
                             status={(room.status as "Live") || "Blocked"}
-                            onJoin={joinRoom}
+                            onJoin={() => joinRoom(room)}
                         />
                     </Grid>
                 ))}
