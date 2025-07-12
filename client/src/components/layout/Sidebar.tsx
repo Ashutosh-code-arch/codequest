@@ -1,7 +1,6 @@
 import {
     Avatar,
     Box,
-    Button,
     Divider,
     IconButton,
     List,
@@ -10,7 +9,6 @@ import {
     ListItemText,
     Typography,
 } from "@mui/material";
-import { useNavigate } from "react-router-dom";
 import React from "react";
 import { menuItems } from "../../config/menuItems";
 import MoreVertIcon from "@mui/icons-material/MoreVert";
@@ -19,12 +17,10 @@ import InfoIcon from "@mui/icons-material/Info";
 import SidebarItem from "./SidebarItem";
 
 const Sidebar = () => {
-    const navigate = useNavigate();
-
     return (
         <Box
             sx={{
-                width: 220,
+                width: 230,
                 height: "100vh",
                 backgroundColor: "#15364fff",
                 color: "#fff",
@@ -80,7 +76,7 @@ const Sidebar = () => {
             <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
                 <List dense>
                     <ListItem
-                        button
+                        component={"button"}
                         sx={{
                             color: "#fff",
                             mb: 1,
@@ -98,7 +94,7 @@ const Sidebar = () => {
                         <ListItemText primary="Settings" />
                     </ListItem>
                     <ListItem
-                        button
+                        component={"button"}
                         sx={{
                             color: "#fff",
                             mb: 1,

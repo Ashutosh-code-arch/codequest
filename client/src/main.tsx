@@ -6,14 +6,17 @@ import { BrowserRouter } from "react-router-dom";
 import { store } from "./store/index.ts";
 import { ToastContainer } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
+import { CustomThemeProvider } from "./context/ThemeProvider.tsx";
 
 createRoot(document.getElementById("root")!).render(
     <StrictMode>
         <Provider store={store}>
-            <BrowserRouter>
-                <ToastContainer position="top-right" />
-                <App />
-            </BrowserRouter>
+            <CustomThemeProvider>
+                <BrowserRouter>
+                    <ToastContainer position="top-right" />
+                    <App />
+                </BrowserRouter>
+            </CustomThemeProvider>
         </Provider>
     </StrictMode>
 );

@@ -161,7 +161,7 @@ const DashboardPage = () => {
 
             <Grid container spacing={2}>
                 {practiceQuestions.map((q, idx) => (
-                    <Grid item xs={12} sm={6} md={4} key={idx}>
+                    <Grid key={idx} sx={{ xs: 12, sm: 6, md: 4 }}>
                         <Card elevation={2}>
                             <CardContent>
                                 <Typography variant="h6" gutterBottom>
