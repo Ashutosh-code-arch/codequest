@@ -8,6 +8,12 @@ const endpoints = {
         join: (roomId: string) => `/rooms/${roomId}/join`,
         get: (roomId: string) => `/rooms/${roomId}`,
     },
+    questions: {
+        get: "/questions",
+    },
+    code: {
+        run: "code/run",
+    },
 };
 
 export default endpoints;

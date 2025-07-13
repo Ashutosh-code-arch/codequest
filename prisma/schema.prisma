@@ -24,11 +24,7 @@ model User {
   // Relation fields 
   hostedRooms      CodingRoom[]      @relation("UserHostedRooms")
   roomParticipants RoomParticipant[]
-}
-
-enum Role {
-  MENTOR
-  CANDIDATE
+  submissions      Submission[]
 }
 
 model CodingRoom {
@@ -39,7 +35,9 @@ model CodingRoom {
   hostId       String
   host         User              @relation("UserHostedRooms", fields: [hostId], references: [id])
   participants RoomParticipant[]
-  isActive     Boolean           @default(true)
+  session      RoomSession[]
+
+  isActive Boolean @default(true)
 }
 
 model RoomParticipant {
@@ -53,4 +51,53 @@ model RoomParticipant {
   room CodingRoom @relation(fields: [roomId], references: [id])
 
   @@unique([userId, roomId])
+}
+
+model Question {
+  id          String     @id @default(cuid())
+  title       String
+  description String
+  difficulty  Difficulty
+  tags        String[]
+  createdAt   DateTime   @default(now())
+
+  roomSessions RoomSession[]
+  submissions  Submission[]
+}
+
+model RoomSession {
+  id           String    @id @default(cuid())
+  roomId       String
+  questionId   String
+  startedAt    DateTime  @default(now())
+  endedAt      DateTime?
+  language     String    @default("javascript")
+  codeSnapshot String?
+
+  room     CodingRoom @relation(fields: [roomId], references: [id])
+  question Question   @relation(fields: [questionId], references: [id])
+}
+
+model Submission {
+  id         String   @id @default(cuid())
+  userId     String
+  questionId String
+  code       String
+  language   String
+  output     String
+  createdAt  DateTime @default(now())
+
+  user     User     @relation(fields: [userId], references: [id])
+  question Question @relation(fields: [questionId], references: [id])
+}
+
+enum Role {
+  MENTOR
+  CANDIDATE
+}
+
+enum Difficulty {
+  EASY
+  MEDIUM
+  HARD
 }

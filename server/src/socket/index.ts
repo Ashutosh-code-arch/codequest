@@ -12,18 +12,16 @@ export const initSocketServer = (httpServer: HTTPServer) => {
     io.on("connection", (socket) => {
         console.log("🟢 Client connected:", socket.id);
 
-        socket.on("join-room", (data) => {
-            const roomId = data?.roomId;
-            const user = data?.user;
-
+        socket.on("join-room", ({ roomId, user }) => {
             if (!roomId || !user?.name) {
-                console.warn("⚠️ Invalid join-room payload:", data);
+                console.warn("⚠️ Invalid join-room payload:", user);
                 socket.emit("error", { message: "Invalid room or user data" });
                 return;
             }
 
             socket.join(roomId);
             console.log(`✅ ${user.name} (${socket.id}) joined room ${roomId}`);
+            socket.to(roomId).emit("user-joined", user);
         });
 
         socket.on("leave-room", (roomId) => {
