@@ -136,23 +136,32 @@ import {
     CardContent,
     Button,
 } from "@mui/material";
+import { useQuestions } from "../api/hooks/useQuestions";
 
-const practiceQuestions = [
-    {
-        title: "Two Sum",
-        tags: ["Braining 3", "strateges"],
-    },
-    {
-        title: "Reverse a List",
-        tags: ["Blinking 8", "starts"],
-    },
-    {
-        title: "Validate Binary Search Tree",
-        tags: ["8", "eotenest strange"],
-    },
-];
+type Question = {
+    title: string;
+    difficulty: string;
+    tags: string[];
+};
+
+// const practiceQuestions: Question[] = [
+//     {
+//         title: "Two Sum",
+//         tags: ["Braining 3", "strateges"],
+//     },
+//     {
+//         title: "Reverse a List",
+//         tags: ["Blinking 8", "starts"],
+//     },
+//     {
+//         title: "Validate Binary Search Tree",
+//         tags: ["8", "eotenest strange"],
+//     },
+// ];
 
 const DashboardPage = () => {
+    const questions: Question[] = useQuestions();
+
     return (
         <Box>
             <Typography variant="h5" fontWeight="bold" mb={4}>
@@ -160,7 +169,7 @@ const DashboardPage = () => {
             </Typography>
 
             <Grid container spacing={2}>
-                {practiceQuestions.map((q, idx) => (
+                {questions.map((q, idx) => (
                     <Grid key={idx} sx={{ xs: 12, sm: 6, md: 4 }}>
                         <Card elevation={2}>
                             <CardContent>

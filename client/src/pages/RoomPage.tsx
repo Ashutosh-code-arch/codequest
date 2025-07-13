@@ -75,15 +75,41 @@ import {
 } from "@mui/material";
 import Editor from "@monaco-editor/react";
 import { useParams } from "react-router-dom";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { useSelector } from "react-redux";
+import { selectUser } from "../features/auth/authSlice";
+import { socket } from "../services/socket";
+import { runCode } from "../api/hooks/useCodeRunner";
 
 const RoomPage = () => {
     const { roomId } = useParams();
     const [language, setLanguage] = useState("javascript");
     const [code, setCode] = useState("// write your solution");
+    const user = useSelector(selectUser);
 
-    const handleRun = () => {
-        console.log("Run code:", code);
+    useEffect(() => {
+        if (roomId) {
+            socket.emit("join-room", { roomId, user });
+            socket.on("sync-code", (incomingCode) => {
+                setCode(incomingCode);
+            });
+        }
+
+        return () => {
+            socket.emit("leave-room", { roomId });
+            socket.off("sync-code");
+        };
+    }, [roomId]);
+
+    const handleEditorChange = (val: string | undefined) => {
+        const updatedCode = val || "";
+        setCode(updatedCode);
+        socket.emit("code-change", { roomId, code: updatedCode });
+    };
+
+    const handleRun = async () => {
+        const result = await runCode(code, language);
+        console.log("Output:", result.output);
     };
 
     return (
