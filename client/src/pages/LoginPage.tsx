@@ -32,14 +32,16 @@ const LoginPage = () => {
         try {
             const res = await api.post(
                 endpoints.auth.register,
-                { email, name, role: "CANDIDATE" },
+                { email, name },
                 {
                     headers: { Authorization: `Bearer ${token}` },
                 }
             );
             console.log("✅ Backend registration:", res.data);
+            return res;
         } catch (err) {
             console.error("❌ Backend registration failed", err);
+            return undefined;
         }
     };
 
@@ -78,16 +80,13 @@ const LoginPage = () => {
         try {
             await signInWithEmailAndPassword(auth, email, password);
 
-            // ✅ Wait for Firebase Auth to fully load currentUser
+            // Wait for Firebase Auth to fully load currentUser
             onAuthStateChanged(auth, async (user) => {
                 if (user) {
-                    const token = await user.getIdToken(true); // force fresh token
-                    console.log("TOKEN:", token); // should match browser token exactly
-
-                    await api.get(endpoints.auth.me, {
+                    const token = await user.getIdToken(true);
+                    const userDetails = await api.get(endpoints.auth.me, {
                         headers: { Authorization: `Bearer ${token}` },
                     });
-
                     dispatch(
                         setUser({
                             uid: user.uid,
@@ -96,6 +95,8 @@ const LoginPage = () => {
                                 user.displayName ||
                                 user.email?.split("@")[0] ||
                                 "",
+                            role: userDetails?.data?.role,
+                            token: token,
                         })
                     );
 
@@ -121,13 +122,15 @@ const LoginPage = () => {
             await updateProfile(user, { displayName: name });
 
             const token = await user.getIdToken();
-            await registerBackendUser(token, name, email);
+            const userDetails = await registerBackendUser(token, name, email);
 
             dispatch(
                 setUser({
                     uid: user.uid,
                     email: user.email,
                     name,
+                    role: userDetails?.data?.role,
+                    token: token,
                 })
             );
 
@@ -143,17 +146,18 @@ const LoginPage = () => {
             const user = result.user;
             const token = await user.getIdToken();
 
-            await registerBackendUser(
+            const userDetails = await registerBackendUser(
                 token,
                 user.displayName || "No Name",
                 user.email || ""
             );
-
             dispatch(
                 setUser({
                     uid: user.uid,
                     email: user.email,
                     name: user.displayName || user.email?.split("@")[0] || "",
+                    role: userDetails?.data?.role,
+                    token: token,
                 })
             );
 

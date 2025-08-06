@@ -5,6 +5,7 @@ import {
     IconButton,
     List,
     ListItem,
+    ListItemButton,
     ListItemIcon,
     ListItemText,
     Typography,
@@ -15,8 +16,23 @@ import MoreVertIcon from "@mui/icons-material/MoreVert";
 import SettingsIcon from "@mui/icons-material/Settings";
 import InfoIcon from "@mui/icons-material/Info";
 import SidebarItem from "./SidebarItem";
+import { useDispatch, useSelector } from "react-redux";
+import { selectUser } from "../../features/auth/authSlice";
+import {
+    Dashboard as DashboardIcon,
+    Quiz as QuizIcon,
+    Group as GroupIcon,
+    Logout as LogoutIcon,
+} from "@mui/icons-material";
+import { useNavigate } from "react-router-dom";
 
 const Sidebar = () => {
+    const user = useSelector(selectUser);
+    const navigate = useNavigate();
+    const dispatch = useDispatch();
+
+    console.log("----user----", user);
+
     return (
         <Box
             sx={{
@@ -57,19 +73,49 @@ const Sidebar = () => {
 
             <Box sx={{ flexGrow: 1 }}>
                 <List>
-                    {menuItems.map((item) => {
-                        const Icon = item.icon;
-                        return (
-                            <React.Fragment>
-                                <SidebarItem
-                                    key={item.label}
-                                    icon={Icon}
-                                    label={item.label}
-                                    path={item.path}
-                                />
-                            </React.Fragment>
-                        );
-                    })}
+                    {user?.role === "MENTOR" && (
+                        <>
+                            <ListItemButton
+                                onClick={() => navigate("/dashboard")}
+                            >
+                                <ListItemIcon>
+                                    <DashboardIcon />
+                                </ListItemIcon>
+                                <ListItemText primary="Dashboard" />
+                            </ListItemButton>
+                            <ListItemButton
+                                onClick={() => navigate("/admin/questions")}
+                            >
+                                <ListItemIcon>
+                                    <QuizIcon />
+                                </ListItemIcon>
+                                <ListItemText primary="Manage Questions" />
+                            </ListItemButton>
+
+                            <ListItemButton
+                                onClick={() => navigate("/admin/rooms")}
+                            >
+                                <ListItemIcon>
+                                    <GroupIcon />
+                                </ListItemIcon>
+                                <ListItemText primary="Manage Rooms/Users" />
+                            </ListItemButton>
+                        </>
+                    )}
+                    {user?.role === "CANDIDATE" &&
+                        menuItems.map((item) => {
+                            const Icon = item.icon;
+                            return (
+                                <React.Fragment>
+                                    <SidebarItem
+                                        key={item.label}
+                                        icon={Icon}
+                                        label={item.label}
+                                        path={item.path}
+                                    />
+                                </React.Fragment>
+                            );
+                        })}
                 </List>
             </Box>
             <Divider sx={{ backgroundColor: "#2E5C78", my: 1.5 }} />
@@ -131,10 +177,15 @@ const Sidebar = () => {
                         />
                         <Box>
                             <Typography variant="body2" fontWeight="bold">
-                                John Doe
+                                {user?.name}
                             </Typography>
                             <Typography variant="caption" color="gray">
-                                john.doe@email.com
+                                {user?.email}
+                            </Typography>
+                            <Typography variant="body2" color="text.secondary">
+                                {user?.role === "MENTOR"
+                                    ? "Admin"
+                                    : "Candidate"}
                             </Typography>
                         </Box>
                     </Box>

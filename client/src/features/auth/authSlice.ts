@@ -5,6 +5,9 @@ interface User {
     uid: string;
     email: string | null;
     name: string | null;
+    photoUrl?: string;
+    role: "CANDIDATE" | "MENTOR";
+    token: string;
 }
 
 interface AuthState {
