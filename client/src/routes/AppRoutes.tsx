@@ -4,7 +4,7 @@ import RoomPage from "../pages/RoomPage";
 import LoginPage from "../pages/LoginPage";
 import ProtectedRoute from "./ProtectedRoute";
 import MainLayout from "../layouts/MainLayout";
-import CodingRoomsPage from "../pages/CodingRoomPage";
+import CodingRoomsPage from "../pages/CodingRoomsPage";
 import HistoryPage from "../pages/HistoryPage";
 
 const AppRoutes = () => {

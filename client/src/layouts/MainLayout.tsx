@@ -9,7 +9,7 @@ const MainLayout = () => {
             <Sidebar />
             <Box sx={{ flex: 1 }}>
                 <TopBar />
-                <Box sx={{ p: 4 }}>
+                <Box sx={{ margin: 0.8 }}>
                     <Outlet />
                 </Box>
             </Box>
