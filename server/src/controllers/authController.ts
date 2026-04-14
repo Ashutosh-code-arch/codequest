@@ -17,16 +17,14 @@ export const register = async (req: Request, res: Response) => {
     const { email, name } = req.body;
     const role = "CANDIDATE";
     try {
-        const existingUser = await prisma.user.findUnique({ where: { email } });
-        if (existingUser)
-            return res.status(200).json({ message: "User already existes." });
+        // const existingUser = await prisma.user.findUnique({ where: { email } });
+        // if (existingUser)
+        //     return res.status(200).json({ message: "User already existes." });
 
-        const newUser = await prisma.user.create({
-            data: {
-                email,
-                name,
-                role,
-            },
+        const newUser = await prisma.user.upsert({
+            where: { email },
+            update: { name },
+            create: { email, name, role },
         });
         res.status(201).json(newUser);
     } catch (err) {

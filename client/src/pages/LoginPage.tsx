@@ -45,37 +45,6 @@ const LoginPage = () => {
         }
     };
 
-    // const handleLogin = async () => {
-    //     try {
-    //         const result = await signInWithEmailAndPassword(
-    //             auth,
-    //             email,
-    //             password
-    //         );
-    //         const user = result.user;
-    //         const token = await user.getIdToken(true);
-
-    //         console.log("user_____", user);
-    //         console.log("token_____", token);
-
-    //         await axios.get(endpoints.auth.me, {
-    //             headers: { Authorization: `Bearer ${token}` },
-    //         });
-
-    //         dispatch(
-    //             setUser({
-    //                 uid: user.uid,
-    //                 email: user.email,
-    //                 name: user.displayName || user.email?.split("@")[0] || "",
-    //             })
-    //         );
-
-    //         navigate("/dashboard");
-    //     } catch (err) {
-    //         console.error("❌ Login failed", err);
-    //     }
-    // };
-
     const handleLogin = async () => {
         try {
             await signInWithEmailAndPassword(auth, email, password);
