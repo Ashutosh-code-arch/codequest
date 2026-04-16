@@ -1,6 +1,25 @@
+# Dependencies
 node_modules
-# Keep environment variables out of version control
+
+# Environment
 .env
+.env.local
+.env.production
+
+#Build output
+dist/
+build/
+
+#OS
+.DS_Store
+Thumbs.db
+
+#Logs
+*.Logs
+
+#Editor
+.vscode/
+.idea/
 
 /generated/prisma
 /server/.env
