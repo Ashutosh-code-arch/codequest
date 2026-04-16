@@ -1,0 +1,180 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  ADMIN
+  USER
+}
+
+enum RoomStatus {
+  ACTIVE
+  ENDED
+  TERMINATED
+}
+
+enum Language {
+  JAVASCRIPT
+  JAVA
+  PYTHON
+  CPP
+  C
+}
+
+model User {
+  id           String   @id @default(uuid())
+  email        String   @unique
+  username     String   @unique
+  passwordHash String
+  role         Role     @default(USER)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  roomsCreated   Room[]            @relation("RoomCreator")
+  participations RoomParticipant[]
+  submission     Submission[]
+  chatMessage    ChatMessage[]
+
+  @@index([email])
+  @@index([role])
+}
+
+model Room {
+  id           String     @id @default(uuid())
+  creatorId    String
+  creator      User       @relation("RoomCreator", fields: [creatorId], references: [id])
+  status       RoomStatus @default(ACTIVE)
+  maxUsers     Int        @default(4)
+  timerSeconds Int        @default(3600)
+  language     Language   @default(JAVASCRIPT)
+  startedAt    DateTime   @default(now())
+  endedAt      DateTime?
+  createdAt    DateTime   @default(now())
+
+  participants RoomParticipant[]
+  questions    RoomQuestion[]
+  chatMessages ChatMessage[]
+  snapshots    CodeSnapshot[]
+  submissions  Submission[]
+
+  @@index([status])
+  @@index([creatorId])
+}
+
+model RoomParticipant {
+  id       String    @id @default(uuid())
+  roomId   String
+  userId   String
+  joinedAt DateTime  @default(now())
+  leftAT   DateTime?
+  isActive Boolean   @default(true)
+
+  room Room @relation(fields: [roomId], references: [id])
+  user User @relation(fields: [userId], references: [id])
+
+  @@unique([roomId, userId])
+  @@index([roomId])
+  @@index([userId])
+}
+
+model Question {
+  id          String   @id @default(uuid())
+  title       String
+  description String
+  difficulty  String
+  tags        String[]
+  isActive    Boolean  @default(true)
+  createdById String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  testCases    TestCase[]
+  roomQuestion RoomQuestion[]
+  submissions  Submission[]
+
+  @@index([difficulty])
+  @@index([isActive])
+}
+
+model TestCase {
+  id             String  @id @default(uuid())
+  questionId     String
+  input          String
+  expectedOutput String
+  isHidden       Boolean @default(false)
+  timeLimit      Int     @default(2000)
+  memoryLimit    Int     @default(256)
+
+  question Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
+
+  @@index([questionId])
+}
+
+model RoomQuestion {
+  roomId     String
+  questionId String
+  addedAt    DateTime @default(now())
+
+  room     Room     @relation(fields: [roomId], references: [id])
+  question Question @relation(fields: [questionId], references: [id])
+
+  @@id([roomId, questionId])
+}
+
+model Submission {
+  id           String   @id @default(uuid())
+  userId       String
+  questionId   String
+  roomId       String?
+  code         String
+  language     Language
+  status       String
+  executionMs  Int?
+  memoryUsedMB Int?
+  submittedAt  DateTime @default(now())
+
+  user     User     @relation(fields: [userId], references: [id])
+  question Question @relation(fields: [questionId], references: [id])
+  room     Room?    @relation(fields: [roomId], references: [id])
+
+  @@index([userId, questionId])
+  @@index([roomId])
+}
+
+model ChatMessage {
+  id        String   @id @default(uuid())
+  roomId    String
+  userId    String
+  content   String
+  createdAt DateTime @default(now())
+
+  room Room @relation(fields: [roomId], references: [id])
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([roomId, createdAt])
+}
+
+model CodeSnapshot {
+  id        String   @id @default(uuid())
+  roomId    String?
+  code      String
+  language  Language
+  savedAt   DateTime @default(now())
+  savedById String
+
+  room Room? @relation(fields: [roomId], references: [id])
+
+  @@index([roomId, savedAt])
+}
