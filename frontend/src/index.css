@@ -4,6 +4,5 @@
 
 @tailwind base;
 
-@custom-variant dark (&:is(.dark *));
 @tailwind components;
 @tailwind utilities;
