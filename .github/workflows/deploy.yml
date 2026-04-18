@@ -1,0 +1,58 @@
+name: CI / Deploy
+
+on:
+    push:
+        branches: [ main ]
+    pull_request:
+        branches: [ main ]
+
+jobs:
+    typecheck:
+        name: TypeScript check
+        runs-on: ubuntu-latest
+        steps:
+            - uses: actions/checkout@v4
+
+            - uses: actions/setup-node@v4
+              with:
+                  node-version: "20"
+                  cache: "npm"
+                  cache-dependency-path: |
+                      backend/package-lock.json
+                      frontend/package-lock.json
+
+            - name: Typecheck backend
+              working-directory: ./backend
+              run: npm ci && npx tsc --noEmit
+
+            - name: Typecheck frontend
+              working-directory: ./frontend
+              run: npm ci && npx tsc --noEmit
+
+    deploy-backend:
+        name: Deploy to Render
+        needs: typecheck
+        if: github.ref == 'ref/heads/main' && github.event_name == 'push'
+        runs-on: ubuntu-latest
+        steps:
+            - name: Trigger Render deploy hook
+              run: curl -fsSL _X POST "${{ secrets.RENDER_DEPLOY_HOOK_URL }}"
+
+    deploy-frontend:
+        name: Deploy to Vercel
+        needs: typecheck
+        if: github.ref == 'ref/heads/main' && github.event_name == 'push'
+        runs-on: ubuntu-latest
+        steps:
+            - uses: actions/checkout@v4
+            - uses: actions/setup-node@v4
+              with:
+                  node-version: "20"
+            - name: Install Vercel CLI
+              run: npm install -g vercel
+            - name: Deploy
+              working-directory: ./frontend
+              run: vercel --token=${{ secrets.VERCEL_TOKEN }} --prod --yes
+              env:
+                  VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+                  VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
