@@ -4,6 +4,7 @@ import helmet from "helmet";
 import cors from "cors";
 import { prisma } from "./lib/prisma";
 import { logger } from "./lib/logger";
+import authRoutes from "./routes/auth";
 
 const app = express();
 const httpServer = createServer(app);
@@ -16,6 +17,9 @@ app.use(
     }),
 );
 app.use(express.json());
+
+// Routes
+app.use("/api/v1/auth", authRoutes);
 
 app.get("/health", async (_req, res) => {
     try {
