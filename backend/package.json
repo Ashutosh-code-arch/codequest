@@ -9,8 +9,11 @@
         "typecheck": "tsc --noEmit",
         "db:migrate": "prisma migrate dev",
         "db:generate": "prisma generate",
-        "db:send": "ts-node --transpile-only prisma/seed.ts",
+        "db:seed": "ts-node --project prisma/tsconfig.json prisma/seed.ts",
         "db:studio": "prisma studio"
+    },
+    "prisma": {
+        "seed": "ts-node --project prisma/tsconfig.json prisma/seed.ts"
     },
     "keywords": [],
     "author": "",

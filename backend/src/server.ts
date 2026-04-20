@@ -5,6 +5,7 @@ import cors from "cors";
 import { prisma } from "./lib/prisma";
 import { logger } from "./lib/logger";
 import authRoutes from "./routes/auth";
+import adminRoutes from "./routes/admin";
 
 const app = express();
 const httpServer = createServer(app);
@@ -20,6 +21,7 @@ app.use(express.json());
 
 // Routes
 app.use("/api/v1/auth", authRoutes);
+app.use("/api/v1/admin", adminRoutes);
 
 app.get("/health", async (_req, res) => {
     try {
