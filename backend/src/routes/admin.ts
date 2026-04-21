@@ -261,4 +261,139 @@ router.delete("/questions/:id", async (req, res) => {
     }
 });
 
+// -------------------- Test Cases -------------------------------
+import {
+    createTestCaseSchema,
+    updateTestCaseSchema,
+} from "../validators/question";
+
+// POST /api/v1/admin/questions/:id/testCases
+router.post("/questions/:id/testcases", async (req, res) => {
+    const result = createTestCaseSchema.safeParse(req.body);
+    if (!result.success) {
+        res.status(400).json({
+            success: false,
+            error: {
+                code: "VALIDATION_ERROR",
+                message: result.error.issues[0].message,
+                statusCode: 400,
+            },
+        });
+        return;
+    }
+
+    try {
+        // verify question exists first
+        const question = await prisma.question.findUnique({
+            where: { id: req.params.id },
+        });
+        if (!question) {
+            res.status(404).json({
+                success: false,
+                error: {
+                    code: "NOT_FOUND",
+                    message: "Question not found",
+                    statusCode: 404,
+                },
+            });
+            return;
+        }
+
+        const testCase = await prisma.testCase.create({
+            data: { ...result.data, questionId: req.params.id },
+        });
+        logger.info(
+            { testCaseId: testCase.id, questionId: req.params.id },
+            "Test case created",
+        );
+        res.status(201).json({ success: true, data: { testCase } });
+    } catch (err) {
+        logger.error(err, "POST /admin/question/:id/testcases failed");
+        res.status(500).json({
+            success: false,
+            error: {
+                code: "SERVER_ERROR",
+                message: "Failed to create test case",
+                statusCode: 500,
+            },
+        });
+    }
+});
+
+// PUT /api/v1/admin/testCases/:id
+router.put("/testcases/:id", async (req, res) => {
+    const result = updateTestCaseSchema.safeParse(req.body);
+    if (!result.success) {
+        res.status(400).json({
+            success: false,
+            error: {
+                code: "VALIDATION_ERROR",
+                message: result.error.issues[0].message,
+                statusCode: 400,
+            },
+        });
+        return;
+    }
+
+    try {
+        const testCase = await prisma.testCase.update({
+            where: { id: req.params.id },
+            data: result.data,
+        });
+        res.json({ success: true, data: { testCase } });
+    } catch (err: unknown) {
+        const isNotFound = (err as { code?: string }).code === "P2025";
+        if (isNotFound) {
+            res.status(404).json({
+                success: false,
+                error: {
+                    code: "NOT_FOUND",
+                    message: "Test case not found",
+                    statusCode: 404,
+                },
+            });
+            return;
+        }
+        logger.error(err, "PUT /admin/testcases/:id failed");
+        res.status(500).json({
+            success: false,
+            error: {
+                code: "SERVER_ERROR",
+                message: "Failed to update test case",
+            },
+        });
+    }
+});
+
+// DELETE /api/v1/admin/testcases/:id
+router.delete("/testcases/:id", async (req, res) => {
+    try {
+        await prisma.testCase.delete({ where: { id: req.params.id } });
+        logger.info({ testCaseId: req.params.id }, "Test case deleted");
+        res.json({ success: true, data: { message: "Test case deleted" } });
+    } catch (err: unknown) {
+        const isNotFound = (err as { code?: string }).code === "P2025";
+        if (isNotFound) {
+            res.status(404).json({
+                success: false,
+                error: {
+                    code: "NOT_FOUND",
+                    message: "Test case not found",
+                    statusCode: 404,
+                },
+            });
+            return;
+        }
+        logger.error(err, "DELETE /admin/testcases/:id failed");
+        res.status(500).json({
+            success: false,
+            error: {
+                code: "SERVER_ERROR",
+                message: "Failed to fetch test case",
+                statusCode: 500,
+            },
+        });
+    }
+});
+
 export default router;
