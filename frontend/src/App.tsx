@@ -3,6 +3,7 @@ import { ProtectedRoute, AdminRoute } from "./components/ProtectedRoute";
 import Login from "./pages/Login";
 import Register from "./pages/Register";
 import Dashboard from "./pages/Dashboard";
+import AdminPanel from "./pages/AdminPanel";
 
 // Placeholder — replaced in later phases
 function ComingSoon({ label }: { label: string }) {
@@ -41,10 +42,7 @@ export default function App() {
 
                 {/* Admin only */}
                 <Route element={<AdminRoute />}>
-                    <Route
-                        path="/admin"
-                        element={<ComingSoon label="Admin panel" />}
-                    />
+                    <Route path="/admin" element={<AdminPanel />} />
                 </Route>
 
                 <Route path="/" element={<Navigate to="/login" replace />} />

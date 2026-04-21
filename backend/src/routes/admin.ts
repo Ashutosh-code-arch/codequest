@@ -396,4 +396,106 @@ router.delete("/testcases/:id", async (req, res) => {
     }
 });
 
+// ─── Rooms ────────────────────────────────────────────────────────────────────
+
+// GET /api/v1/admin/rooms
+router.get("/rooms", async (req, res) => {
+    try {
+        const page = Math.max(1, Number(req.query.page ?? 1));
+        const limit = Math.min(100, Number(req.query.limit ?? 20));
+        const skip = (page - 1) * limit;
+
+        const [rooms, total] = await Promise.all([
+            prisma.room.findMany({
+                skip,
+                take: limit,
+                orderBy: { startedAt: "desc" },
+                include: {
+                    creator: {
+                        select: { id: true, username: true, email: true },
+                    },
+                    _count: { select: { participants: true } },
+                },
+            }),
+            prisma.room.count(),
+        ]);
+
+        res.json({
+            success: true,
+            data: {
+                rooms,
+                total,
+                page,
+                limit,
+                totalPages: Math.ceil(total / limit),
+            },
+        });
+    } catch (err) {
+        logger.error(err, "GET /admin/rooms failed");
+        res.status(500).json({
+            success: false,
+            error: {
+                code: "SERVER_ERROR",
+                message: "Failed to fetch rooms",
+                statusCode: 500,
+            },
+        });
+    }
+});
+
+// POST /api/v1/admin/rooms/:id/terminate
+router.post("/rooms/:id/terminate", async (req, res) => {
+    try {
+        const room = await prisma.room.findUnique({
+            where: { id: req.params.id },
+        });
+        if (!room) {
+            res.status(404).json({
+                success: false,
+                error: {
+                    code: "NOT_FOUND",
+                    message: "Room not found",
+                    statusCode: 404,
+                },
+            });
+            return;
+        }
+        if (room.status !== "ACTIVE") {
+            res.status(400).json({
+                success: false,
+                error: {
+                    code: "ROOM_NOT_ACTIVE",
+                    message: "Room is not active",
+                    statusCode: 400,
+                },
+            });
+            return;
+        }
+
+        await prisma.room.update({
+            where: { id: req.params.id },
+            data: { status: "TERMINATED", endedAt: new Date() },
+        });
+
+        // TODO F3: emit socket event to kick all users from room
+        // io.to(req.params.id).emit('room:terminated', { reason: 'Terminated by admin' })
+
+        logger.info(
+            { roomId: req.params.id, adminId: req.user!.id },
+            "Room terminated by admin",
+        );
+        res.json({ success: true, data: { message: "Room terminated" } });
+    } catch (err) {
+        logger.error(err, "POST /admin/rooms/:id/terminate failed");
+        res.status(500).json({
+            success: false,
+            error: {
+                code: "SERVER_ERROR",
+                message: "Failed to terminate room",
+                statusCode: 500,
+            },
+        });
+    }
+});
+
 export default router;
