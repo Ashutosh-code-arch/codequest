@@ -1,5 +1,6 @@
 import express from "express";
 import { createServer } from "http";
+import { Server } from "socket.io";
 import helmet from "helmet";
 import cors from "cors";
 import { prisma } from "./lib/prisma";
@@ -7,11 +8,26 @@ import { logger } from "./lib/logger";
 import authRoutes from "./routes/auth";
 import adminRoutes from "./routes/admin";
 import roomRoutes from "./routes/room";
+import { initSocket } from "./socket";
 
 const app = express();
 const httpServer = createServer(app);
 
-app.use(helmet());
+// ------- Socket.IO ---------------
+const io = new Server(httpServer, {
+    cors: {
+        origin: process.env.FRONTEND_URL ?? "http://localhost:5173",
+        credentials: true,
+    },
+    pingTimeout: 20000,
+    pingInterval: 25000,
+});
+
+initSocket(io);
+
+// ------------- Express middleware ----------------
+
+app.use(helmet({ contentSecurityPolicy: false }));
 app.use(
     cors({
         origin: process.env.FRONTEND_URL ?? "http://localhost:5173",
@@ -20,11 +36,12 @@ app.use(
 );
 app.use(express.json());
 
-// Routes
+// ------------------------ Routes ----------------------
 app.use("/api/v1/auth", authRoutes);
 app.use("/api/v1/admin", adminRoutes);
 app.use("/api/v1/rooms", roomRoutes);
 
+// ------------------------ Health -----------------------
 app.get("/health", async (_req, res) => {
     try {
         await prisma.$queryRaw`SELECT 1`;
@@ -35,10 +52,11 @@ app.get("/health", async (_req, res) => {
     }
 });
 
+// ---------------- Start -------------------------
 const PORT = Number(process.env.PORT ?? 4000);
 
 httpServer.listen(PORT, () => {
     logger.info(`Server running on port ${PORT}`);
 });
 
-export { httpServer };
+export { httpServer, io };
