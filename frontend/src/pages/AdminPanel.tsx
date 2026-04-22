@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import type { Question } from "../types";
 import {
@@ -282,18 +282,37 @@ function TestCaseManager({
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState("");
 
-    const load = useCallback(async () => {
-        try {
-            const q = await getQuestionApi(questionId);
-            setQuestion(q);
-        } finally {
-            setLoading(false);
-        }
-    }, [questionId]);
+    // const load = useCallback(async () => {
+    //     try {
+    //         const q = await getQuestionApi(questionId);
+    //         setQuestion(q);
+    //     } finally {
+    //         setLoading(false);
+    //     }
+    // }, [questionId]);
+
+    // useEffect(() => {
+    //     load();
+    // }, [load]);
 
     useEffect(() => {
-        load();
-    }, [load]);
+        let cancelled = false;
+
+        async function fetchQuestion() {
+            try {
+                const q = await getQuestionApi(questionId);
+                if (cancelled) return;
+                setQuestion(q);
+            } finally {
+                if (!cancelled) setLoading(false);
+            }
+        }
+
+        fetchQuestion();
+        return () => {
+            cancelled = true;
+        };
+    }, [questionId]);
 
     async function handleAdd() {
         if (!form.input || !form.expectedOutput) {
@@ -311,7 +330,9 @@ function TestCaseManager({
                 timeLimit: 2000,
                 memoryLimit: 256,
             });
-            await load();
+            // await load();
+            const q = await getQuestionApi(questionId);
+            setQuestion(q);
         } catch {
             setError("Failed to add test case");
         } finally {
@@ -323,7 +344,7 @@ function TestCaseManager({
         if (!window.confirm("Delete this test case?")) return;
         try {
             await deleteTestCaseApi(id);
-            await load();
+            // await load();
         } catch {
             alert("Failed to delete test case");
         }
@@ -520,38 +541,80 @@ export default function AdminPanel() {
         "questions",
     );
 
-    const loadQuestions = useCallback(async () => {
-        setLoading(true);
-        try {
-            const data = await getQuestionsApi(page);
-            setQuestions(data.questions);
-            setTotalPages(data.totalPages);
-        } finally {
-            setLoading(false);
-        }
-    }, [page]);
-
-    const loadRooms = useCallback(async () => {
-        setRoomsLoading(true);
-        try {
-            const data = await getAdminRoomsApi();
-            setRooms(data.rooms);
-        } finally {
-            setRoomsLoading(false);
-        }
-    }, []);
+    // const loadQuestions = useCallback(async () => {
+    //     setLoading(true);
+    //     try {
+    //         const data = await getQuestionsApi(page);
+    //         setQuestions(data.questions);
+    //         setTotalPages(data.totalPages);
+    //     } finally {
+    //         setLoading(false);
+    //     }
+    // }, [page]);
 
     useEffect(() => {
-        Promise.resolve().then(() => {
-            if (activeTab === "rooms") loadRooms();
-        });
-    }, [activeTab, loadRooms]);
+        let cancelled = false;
+
+        async function fetchQuestions() {
+            setLoading(true);
+            try {
+                const data = await getQuestionsApi(page);
+                if (cancelled) return;
+                setQuestions(data.questions);
+                setTotalPages(data.totalPages);
+            } finally {
+                if (!cancelled) setLoading(false);
+            }
+        }
+
+        fetchQuestions();
+        return () => {
+            cancelled = true;
+        };
+    }, [page]);
+
+    // const loadRooms = useCallback(async () => {
+    //     setRoomsLoading(true);
+    //     try {
+    //         const data = await getAdminRoomsApi();
+    //         setRooms(data.rooms);
+    //     } finally {
+    //         setRoomsLoading(false);
+    //     }
+    // }, []);
+
+    // useEffect(() => {
+    //     Promise.resolve().then(() => {
+    //         if (activeTab === "rooms") loadRooms();
+    //     });
+    // }, [activeTab, loadRooms]);
 
     useEffect(() => {
-        Promise.resolve().then(() => {
-            loadQuestions();
-        });
-    }, [page]);
+        if (activeTab !== "rooms") return;
+        let cancelled = false;
+
+        async function fetchRooms() {
+            setRoomsLoading(true);
+            try {
+                const data = await getAdminRoomsApi();
+                if (cancelled) return;
+                setRooms(data.rooms);
+            } finally {
+                if (!cancelled) setRoomsLoading(false);
+            }
+        }
+
+        fetchRooms();
+        return () => {
+            cancelled = true;
+        };
+    }, [activeTab]);
+
+    // useEffect(() => {
+    //     Promise.resolve().then(() => {
+    //         loadQuestions();
+    //     });
+    // }, [page]);
 
     // Guard — redirect non-admins
     useEffect(() => {
@@ -562,7 +625,7 @@ export default function AdminPanel() {
         try {
             await deleteQuestionApi(id);
             setConfirmDelete(null);
-            await loadQuestions();
+            // await loadQuestions();
         } catch {
             alert("Failed to delete question");
         }
@@ -571,7 +634,7 @@ export default function AdminPanel() {
     function handleSaved(q: Question) {
         setShowCreate(false);
         setEditQuestion(null);
-        loadQuestions();
+        // loadQuestions();
         void q; // suppress unused warning
     }
 
@@ -584,7 +647,7 @@ export default function AdminPanel() {
             return;
         try {
             await terminateRoomApi(id);
-            await loadRooms();
+            // await loadRooms();
         } catch {
             alert("Failed to terminate room");
         }

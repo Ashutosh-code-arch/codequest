@@ -16,15 +16,25 @@ export interface Room {
     status: string;
     language: Language;
     timerSeconds: number;
+    maxUsers: number;
     startedAt: string;
+    endedAt: string | null;
+    creator: { id: string; username: string };
     participants: Participant[];
-    questions: Question[];
+    questions: RoomQuestion[];
+}
+
+export interface RoomQuestion {
+    questionId: string;
+    question: string;
 }
 
 export interface Participant {
+    id: string;
     userId: string;
     username: string;
     isActive: boolean;
+    joinedAt: string;
 }
 
 export interface Question {

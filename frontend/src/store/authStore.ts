@@ -1,6 +1,7 @@
 import type { User } from "../types";
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
+import { connectSocket, disconnectSocket } from "../lib/sockets";
 
 interface AuthState {
     user: User | null;
@@ -20,9 +21,11 @@ export const useAuthStore = create<AuthState>()(
             login: (user, token) => {
                 localStorage.setItem("accessToken", token);
                 set({ user, token, isAuthenticated: true });
+                connectSocket(token);
             },
             logout: () => {
                 localStorage.removeItem("accessToken");
+                disconnectSocket();
                 set({ user: null, token: null, isAuthenticated: false });
             },
             isAdmin: () => get().user?.role === "ADMIN",
@@ -34,6 +37,12 @@ export const useAuthStore = create<AuthState>()(
                 token: state.token,
                 isAuthenticated: state.isAuthenticated,
             }),
+            onRehydrateStorage: () => (state) => {
+                // Reconnect socket when page reloads with saved auth
+                if (state?.token && state.isAuthenticated) {
+                    connectSocket(state.token);
+                }
+            },
         },
     ),
 );

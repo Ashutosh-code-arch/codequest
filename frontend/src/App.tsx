@@ -4,6 +4,7 @@ import Login from "./pages/Login";
 import Register from "./pages/Register";
 import Dashboard from "./pages/Dashboard";
 import AdminPanel from "./pages/AdminPanel";
+import Room from "./pages/Room";
 
 // Placeholder — replaced in later phases
 function ComingSoon({ label }: { label: string }) {
@@ -30,10 +31,7 @@ export default function App() {
                 {/* Logged-in users */}
                 <Route element={<ProtectedRoute />}>
                     <Route path="/dashboard" element={<Dashboard />} />
-                    <Route
-                        path="/room/:id"
-                        element={<ComingSoon label="Room" />}
-                    />
+                    <Route path="/room/:id" element={<Room />} />
                     <Route
                         path="/history"
                         element={<ComingSoon label="History" />}

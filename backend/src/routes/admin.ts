@@ -266,6 +266,7 @@ import {
     createTestCaseSchema,
     updateTestCaseSchema,
 } from "../validators/question";
+import { io } from "../server";
 
 // POST /api/v1/admin/questions/:id/testCases
 router.post("/questions/:id/testcases", async (req, res) => {
@@ -477,8 +478,9 @@ router.post("/rooms/:id/terminate", async (req, res) => {
             data: { status: "TERMINATED", endedAt: new Date() },
         });
 
-        // TODO F3: emit socket event to kick all users from room
-        // io.to(req.params.id).emit('room:terminated', { reason: 'Terminated by admin' })
+        io.to(req.params.id).emit("room:terminated", {
+            reason: "Terminated by admin",
+        });
 
         logger.info(
             { roomId: req.params.id, adminId: req.user!.id },
