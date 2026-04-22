@@ -6,6 +6,7 @@ import { prisma } from "./lib/prisma";
 import { logger } from "./lib/logger";
 import authRoutes from "./routes/auth";
 import adminRoutes from "./routes/admin";
+import roomRoutes from "./routes/room";
 
 const app = express();
 const httpServer = createServer(app);
@@ -22,6 +23,7 @@ app.use(express.json());
 // Routes
 app.use("/api/v1/auth", authRoutes);
 app.use("/api/v1/admin", adminRoutes);
+app.use("/api/v1/rooms", roomRoutes);
 
 app.get("/health", async (_req, res) => {
     try {
