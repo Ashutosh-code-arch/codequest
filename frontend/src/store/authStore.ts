@@ -37,12 +37,12 @@ export const useAuthStore = create<AuthState>()(
                 token: state.token,
                 isAuthenticated: state.isAuthenticated,
             }),
-            onRehydrateStorage: () => (state) => {
-                // Reconnect socket when page reloads with saved auth
-                if (state?.token && state.isAuthenticated) {
-                    connectSocket(state.token);
-                }
-            },
+            // onRehydrateStorage: () => (state) => {
+            //     // Reconnect socket when page reloads with saved auth
+            //     if (state?.token && state.isAuthenticated) {
+            //         connectSocket(state.token);
+            //     }
+            // },
         },
     ),
 );

@@ -27,7 +27,9 @@ function ParticipantAvatar({
                     </span>
                 </div>
                 <div
-                    className={`absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border-2 border-gray-900 ${isOnline ? "bg-green-400" : "bg-gray-500"}`}
+                    className={`absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border-2 border-gray-900 ${
+                        isOnline ? "bg-green-400" : "bg-gray-500"
+                    }`}
                 />
             </div>
             <span className="text-sm text-gray-300">{username}</span>
@@ -46,39 +48,26 @@ export default function Room() {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState("");
     const [fullToast, setFullToast] = useState(false);
+    const [roomLoaded, setRoomLoaded] = useState(false); // ← ADD THIS
 
-    // const loadRoom = useCallback(async () => {
-    //     if (!roomId) return;
-    //     try {
-    //         const r = await getRoomApi(roomId);
-    //         setRoom(r);
-    //         setParticipants(r.participants);
-    //         setTimer(r.timerSeconds);
-    //     } catch {
-    //         setError("Room not found or you do not have access.");
-    //     } finally {
-    //         setLoading(false);
-    //     }
-    // }, [roomId]);
-
-    // useEffect(() => {
-    //     loadRoom();
-    // }, [loadRoom]);
-
-    // ✅ AFTER — async logic lives inside the effect directly
+    // ── Step 1: Load room ─────────────────────────────────────────────────
     useEffect(() => {
-        if (!roomId) return;
+        if (!roomId) {
+            setError("No room ID in URL");
+            setLoading(false);
+            return;
+        }
 
-        let cancelled = false; // prevents setState after unmount
+        let cancelled = false;
 
         async function fetchRoom() {
             try {
                 const r = await getRoomApi(roomId!);
                 if (cancelled) return;
                 setRoom(r);
-                setParticipants(r.participants);
+                setParticipants(r.participants ?? []);
                 setTimer(r.timerSeconds);
-                // setLanguage(r.language as LangKey);
+                setRoomLoaded(true); // ← triggers second effect
             } catch {
                 if (cancelled) return;
                 setError("Room not found or you do not have access.");
@@ -88,34 +77,37 @@ export default function Room() {
         }
 
         fetchRoom();
-
         return () => {
-            cancelled = true; // cleanup — ignore response if component unmounts
+            cancelled = true;
         };
     }, [roomId]);
 
-    // Socket events
+    // ── Step 2: Socket — only runs after room is loaded ───────────────────
     useEffect(() => {
-        if (!roomId || !room) return;
+        // roomLoaded is false on first render, true after fetchRoom succeeds
+        if (!roomLoaded || !roomId) return;
 
-        // Join the socket room
+        console.log("✅ Socket effect running — room is loaded");
+
         socket.emit("room:join", { roomId });
 
         socket.on("room:user-joined", ({ user: u, participantCount }) => {
+            void participantCount;
             setParticipants((prev) => {
                 if (prev.find((p) => p.userId === u.id)) return prev;
                 return [
                     ...prev,
                     {
-                        id: "",
+                        id: u.id,
+                        roomId: roomId,
                         userId: u.id,
-                        username: u.username,
                         isActive: true,
                         joinedAt: new Date().toISOString(),
+                        leftAt: null,
+                        user: { id: u.id, username: u.username },
                     },
                 ];
             });
-            void participantCount;
         });
 
         socket.on("room:user-left", ({ userId }) => {
@@ -157,7 +149,7 @@ export default function Room() {
             socket.off("room:terminated");
             socket.off("error");
         };
-    }, [roomId, room, navigate]);
+    }, [roomId, roomLoaded, navigate]);
 
     if (loading) {
         return (
@@ -224,11 +216,10 @@ export default function Room() {
                 </div>
 
                 <div className="flex items-center gap-4">
-                    {/* Copy Room ID */}
                     <button
-                        onClick={() => {
-                            navigator.clipboard.writeText(roomId ?? "");
-                        }}
+                        onClick={() =>
+                            navigator.clipboard.writeText(roomId ?? "")
+                        }
                         className="text-xs text-gray-400 hover:text-gray-200 border border-gray-600 px-3 py-1.5 rounded-lg transition flex items-center gap-1.5"
                     >
                         <svg
@@ -247,7 +238,6 @@ export default function Room() {
                         Copy ID
                     </button>
 
-                    {/* Timer */}
                     {timer !== null && (
                         <div
                             className={`font-mono text-sm font-medium ${timerColor}`}
@@ -264,7 +254,7 @@ export default function Room() {
 
             {/* Body */}
             <div className="flex-1 flex overflow-hidden">
-                {/* Editor area placeholder */}
+                {/* Editor placeholder */}
                 <div className="flex-1 flex items-center justify-center bg-gray-900">
                     <div className="text-center">
                         <p className="text-gray-600 text-4xl mb-3 font-mono">
@@ -291,7 +281,7 @@ export default function Room() {
                         {participants.map((p) => (
                             <ParticipantAvatar
                                 key={p.userId}
-                                username={p.username}
+                                username={p.user.username}
                                 isOnline={p.isActive}
                             />
                         ))}
@@ -306,10 +296,10 @@ export default function Room() {
                             <div className="space-y-1.5">
                                 {room.questions.map((rq) => (
                                     <div
-                                        key={rq.questionId}
+                                        key={rq.id}
                                         className="text-xs text-gray-400 hover:text-gray-200 cursor-pointer truncate transition"
                                     >
-                                        {rq.question}
+                                        {rq.title}
                                     </div>
                                 ))}
                             </div>
@@ -318,7 +308,6 @@ export default function Room() {
                 </aside>
             </div>
 
-            {/* Room full toast */}
             {fullToast && (
                 <div className="fixed bottom-4 right-4 bg-red-900 border border-red-700 text-red-200 text-sm px-4 py-2.5 rounded-xl shadow-lg">
                     Room is full — max 4 users

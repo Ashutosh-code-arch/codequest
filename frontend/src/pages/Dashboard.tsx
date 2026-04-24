@@ -1,9 +1,9 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuthStore } from "../store/authStore";
-import { getQuestionsApi } from "../api/admin";
+// import { getPublicQuestionsApi } from "../api/room";
 import type { Room } from "../types";
-import type { QuestionWithCount } from "../api/admin";
+import { getQuestionsApi, type QuestionWithCount } from "../api/admin";
 import { createRoomApi, getUserRoomsApi, joinRoomApi } from "../api/room";
 
 function StatCard({ label, value }: { label: string; value: string | number }) {
@@ -41,6 +41,15 @@ function CreateRoomModal({
     onCreate: (roomId: string) => void;
 }) {
     const [questions, setQuestions] = useState<QuestionWithCount[]>([]);
+    // const [questions, setQuestions] = useState<
+    //     Array<{
+    //         id: string;
+    //         title: string;
+    //         difficulty: string;
+    //         tags: string[];
+    //         _count: { testCases: number };
+    //     }>
+    // >([]);
     const [selectedIds, setSelectedIds] = useState<string[]>([]);
     const [language, setLanguage] = useState("JAVASCRIPT");
     const [timerHours, setTimerHours] = useState(1);
@@ -48,6 +57,11 @@ function CreateRoomModal({
     const [creating, setCreating] = useState(false);
     const [error, setError] = useState("");
 
+    // useEffect(() => {
+    //     getPublicQuestionsApi()
+    //         .then(setQuestions)
+    //         .finally(() => setLoading(false));
+    // }, []);
     useEffect(() => {
         getQuestionsApi(1)
             .then((d) => setQuestions(d.questions))

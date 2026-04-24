@@ -28,3 +28,14 @@ export async function getUserRoomsApi(): Promise<Room[]> {
     const res = await api.get("/api/v1/rooms");
     return res.data.data.rooms;
 }
+
+export async function getPublicQuestionsApi() {
+    const res = await api.get("/api/v1/rooms/questions");
+    return res.data.data.questions as Array<{
+        id: string;
+        title: string;
+        difficulty: string;
+        tags: string[];
+        _count: { testCases: number };
+    }>;
+}

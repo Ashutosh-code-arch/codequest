@@ -21,7 +21,7 @@ export interface Room {
     endedAt: string | null;
     creator: { id: string; username: string };
     participants: Participant[];
-    questions: RoomQuestion[];
+    questions: Question[];
 }
 
 export interface RoomQuestion {
@@ -35,6 +35,11 @@ export interface Participant {
     username: string;
     isActive: boolean;
     joinedAt: string;
+    leftAt: string | null;
+    user: {
+        id: string;
+        username: string;
+    };
 }
 
 export interface Question {

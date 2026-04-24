@@ -256,4 +256,32 @@ router.get("/", async (req, res) => {
     }
 });
 
+// GET /api/v1/rooms/questions  — public list for room creation
+// Any logged-in user can call this
+router.get("/questions", async (req, res) => {
+    try {
+        const questions = await prisma.question.findMany({
+            where: { isActive: true },
+            orderBy: { createdAt: "desc" },
+            select: {
+                id: true,
+                title: true,
+                difficulty: true,
+                tags: true,
+                _count: { select: { testCases: true } },
+            },
+        });
+        res.json({ success: true, data: { questions } });
+    } catch (err) {
+        res.status(500).json({
+            success: false,
+            error: {
+                code: "SERVER_ERROR",
+                message: "Failed to fetch questions",
+                statusCode: 500,
+            },
+        });
+    }
+});
+
 export default router;
