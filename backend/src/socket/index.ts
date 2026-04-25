@@ -4,7 +4,7 @@ import { verifyToken } from "../utils/jwt";
 import { prisma } from "../lib/prisma";
 import { logger } from "../lib/logger";
 import { registerRoomHandlers } from "./roomHandlers";
-import { registerYjsHandlers } from "./yjsHandlers";
+import { registerYjsHandlers } from "./YJSHandlers";
 
 const STARTER_CODE: Record<string, string> = {
     JAVASCRIPT: `function solution() {
