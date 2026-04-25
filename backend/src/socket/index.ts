@@ -4,6 +4,39 @@ import { verifyToken } from "../utils/jwt";
 import { prisma } from "../lib/prisma";
 import { logger } from "../lib/logger";
 import { registerRoomHandlers } from "./roomHandlers";
+import { registerYjsHandlers } from "./yjsHandlers";
+
+const STARTER_CODE: Record<string, string> = {
+    JAVASCRIPT: `function solution() {
+    // your code here
+}
+`,
+    PYTHON: `def solution():
+    # your code here
+    pass
+`,
+    JAVA: `class Solution {
+    public void solution() {
+        // your code here
+    }
+}
+`,
+    CPP: `#include <bits/stdc++.h>
+using namespace std;
+
+int main() {
+    // your code here
+    return 0;
+}
+`,
+    C: `#include <stdio.h>
+
+int main() {
+    // your code here
+    return 0;
+}
+`,
+};
 
 export function initSocket(server: Server) {
     const io = server as TypedServer;
@@ -45,6 +78,34 @@ export function initSocket(server: Server) {
         logger.debug({ userId: socket.data.userId }, "Socket connected");
 
         registerRoomHandlers(io, socket);
+        registerYjsHandlers(io, socket);
+
+        // Language change — persist to DB + broadcast to room
+        socket.on("language:change", async ({ roomId, language }) => {
+            const allowed = ["JAVASCRIPT", "PYTHON", "JAVA", "CPP", "C"];
+            if (!allowed.includes(language)) return;
+            try {
+                await prisma.room.update({
+                    where: { id: roomId },
+                    data: {
+                        language: language as
+                            | "JAVASCRIPT"
+                            | "PYTHON"
+                            | "JAVA"
+                            | "CPP"
+                            | "C",
+                    },
+                });
+                const starterCode = STARTER_CODE[language] ?? "";
+                io.to(roomId).emit("language:changed", {
+                    language,
+                    starterCode,
+                });
+                logger.debug({ roomId, language }, "Language changed");
+            } catch (err) {
+                logger.error(err, "language:change failed");
+            }
+        });
 
         socket.on("disconnect", (reason) => {
             logger.debug(

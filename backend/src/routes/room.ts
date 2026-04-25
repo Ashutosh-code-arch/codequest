@@ -284,4 +284,66 @@ router.get("/questions", async (req, res) => {
     }
 });
 
+// GET /api/v1/rooms/:id/snapshots
+router.get("/:id/snapshots", async (req, res) => {
+    try {
+        const snapshots = await prisma.codeSnapshot.findMany({
+            where: { roomId: req.params.id },
+            orderBy: { savedAt: "desc" },
+            take: 20,
+        });
+        res.json({ success: true, data: { snapshots } });
+    } catch (err) {
+        logger.error(err, "GET /rooms/:id/snapshots failed");
+        res.status(500).json({
+            success: false,
+            error: {
+                code: "SERVER_ERROR",
+                message: "Failed to fetch snapshots",
+                statusCode: 500,
+            },
+        });
+    }
+});
+
+// PATCH /api/v1/rooms/:id/language
+router.patch("/:id/language", async (req, res) => {
+    const { language } = req.body as { language: string };
+    const allowed = ["JAVASCRIPT", "PYTHON", "JAVA", "CPP", "C"];
+    if (!allowed.includes(language)) {
+        res.status(400).json({
+            success: false,
+            error: {
+                code: "INVALID_LANGUAGE",
+                message: "Invalid language",
+                statusCode: 400,
+            },
+        });
+        return;
+    }
+    try {
+        const room = await prisma.room.update({
+            where: { id: req.params.id },
+            data: {
+                language: language as
+                    | "JAVASCRIPT"
+                    | "PYTHON"
+                    | "JAVA"
+                    | "CPP"
+                    | "C",
+            },
+        });
+        res.json({ success: true, data: { language: room.language } });
+    } catch {
+        res.status(500).json({
+            success: false,
+            error: {
+                code: "SERVER_ERROR",
+                message: "Failed to update language",
+                statusCode: 500,
+            },
+        });
+    }
+});
+
 export default router;
