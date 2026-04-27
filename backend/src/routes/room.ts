@@ -89,8 +89,35 @@ router.post("/", async (req, res) => {
     }
 });
 
-// POST /api/v1/rooms/:id/join
+// GET /api/v1/rooms/questions  — public list for room creation
+// Any logged-in user can call this
+router.get("/questions", async (req, res) => {
+    try {
+        const questions = await prisma.question.findMany({
+            where: { isActive: true },
+            orderBy: { createdAt: "desc" },
+            select: {
+                id: true,
+                title: true,
+                difficulty: true,
+                tags: true,
+                _count: { select: { testCases: true } },
+            },
+        });
+        res.json({ success: true, data: { questions } });
+    } catch (err) {
+        res.status(500).json({
+            success: false,
+            error: {
+                code: "SERVER_ERROR",
+                message: "Failed to fetch questions",
+                statusCode: 500,
+            },
+        });
+    }
+});
 
+// POST /api/v1/rooms/:id/join
 router.post("/:id/join", async (req, res) => {
     const roomId = req.params.id;
     const userId = req.user!.id;
@@ -199,7 +226,7 @@ router.get("/:id", async (req, res) => {
 
         if (!room) {
             res.status(404).json({
-                success: true,
+                success: false,
                 error: {
                     code: "NOT_FOUND",
                     message: "Room not found",
@@ -250,34 +277,6 @@ router.get("/", async (req, res) => {
             error: {
                 code: "NETWORK_ERROR",
                 message: "Failed to fetch rooms",
-                statusCode: 500,
-            },
-        });
-    }
-});
-
-// GET /api/v1/rooms/questions  — public list for room creation
-// Any logged-in user can call this
-router.get("/questions", async (req, res) => {
-    try {
-        const questions = await prisma.question.findMany({
-            where: { isActive: true },
-            orderBy: { createdAt: "desc" },
-            select: {
-                id: true,
-                title: true,
-                difficulty: true,
-                tags: true,
-                _count: { select: { testCases: true } },
-            },
-        });
-        res.json({ success: true, data: { questions } });
-    } catch (err) {
-        res.status(500).json({
-            success: false,
-            error: {
-                code: "SERVER_ERROR",
-                message: "Failed to fetch questions",
                 statusCode: 500,
             },
         });

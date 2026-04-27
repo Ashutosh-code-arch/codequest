@@ -16,9 +16,25 @@ export function startRoomTimer(
     durationSeconds: number,
 ) {
     // Don't start if already running
-    if (roomIntervals.has(roomId)) return;
+    if (roomIntervals.has(roomId)) {
+        logger.debug(
+            { roomId },
+            "Timer already running — skipping duplicate start",
+        );
+        return;
+    }
+
+    if (durationSeconds <= 0) {
+        logger.warn(
+            { roomId, durationSeconds },
+            "Invalid timer duration — not starting",
+        );
+        return;
+    }
 
     roomTimers.set(roomId, durationSeconds);
+    logger.info({ roomId, durationSeconds }, "Room timer started");
+
     const interval = setInterval(async () => {
         const current = roomTimers.get(roomId);
         if (current === undefined) {
@@ -65,15 +81,15 @@ export function startRoomTimer(
             }
         }
 
-        try {
-            await prisma.room.update({
-                where: { id: roomId },
-                data: { status: "ENDED", endedAt: new Date() },
-            });
-            logger.info({ roomId }, "Room ended: timer expired");
-        } catch (err) {
-            logger.error(err, "Failed to mark room as ended");
-        }
+        // try {
+        //     await prisma.room.update({
+        //         where: { id: roomId },
+        //         data: { status: "ENDED", endedAt: new Date() },
+        //     });
+        //     logger.info({ roomId }, "Room ended: timer expired");
+        // } catch (err) {
+        //     logger.error(err, "Failed to mark room as ended");
+        // }
     }, 1000);
 
     roomIntervals.set(roomId, interval);
@@ -85,6 +101,7 @@ export function stopRoomTimer(roomId: string) {
     if (interval) {
         clearInterval(interval);
         roomIntervals.delete(roomId);
-        roomTimers.delete(roomId);
     }
+    roomTimers.delete(roomId);
+    logger.debug({ roomId }, "Room timer stopped");
 }

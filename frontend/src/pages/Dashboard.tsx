@@ -3,8 +3,12 @@ import { useNavigate } from "react-router-dom";
 import { useAuthStore } from "../store/authStore";
 // import { getPublicQuestionsApi } from "../api/room";
 import type { Room } from "../types";
-import { getQuestionsApi, type QuestionWithCount } from "../api/admin";
-import { createRoomApi, getUserRoomsApi, joinRoomApi } from "../api/room";
+import {
+    createRoomApi,
+    getPublicQuestionsApi,
+    getUserRoomsApi,
+    joinRoomApi,
+} from "../api/room";
 
 function StatCard({ label, value }: { label: string; value: string | number }) {
     return (
@@ -40,16 +44,16 @@ function CreateRoomModal({
     onClose: () => void;
     onCreate: (roomId: string) => void;
 }) {
-    const [questions, setQuestions] = useState<QuestionWithCount[]>([]);
-    // const [questions, setQuestions] = useState<
-    //     Array<{
-    //         id: string;
-    //         title: string;
-    //         difficulty: string;
-    //         tags: string[];
-    //         _count: { testCases: number };
-    //     }>
-    // >([]);
+    // const [questions, setQuestions] = useState<QuestionWithCount[]>([]);
+    const [questions, setQuestions] = useState<
+        Array<{
+            id: string;
+            title: string;
+            difficulty: string;
+            tags: string[];
+            _count: { testCases: number };
+        }>
+    >([]);
     const [selectedIds, setSelectedIds] = useState<string[]>([]);
     const [language, setLanguage] = useState("JAVASCRIPT");
     const [timerHours, setTimerHours] = useState(1);
@@ -57,14 +61,9 @@ function CreateRoomModal({
     const [creating, setCreating] = useState(false);
     const [error, setError] = useState("");
 
-    // useEffect(() => {
-    //     getPublicQuestionsApi()
-    //         .then(setQuestions)
-    //         .finally(() => setLoading(false));
-    // }, []);
     useEffect(() => {
-        getQuestionsApi(1)
-            .then((d) => setQuestions(d.questions))
+        getPublicQuestionsApi()
+            .then(setQuestions)
             .finally(() => setLoading(false));
     }, []);
 
@@ -86,6 +85,7 @@ function CreateRoomModal({
         setCreating(true);
         setError("");
         try {
+            console.log("Creating room with timerSeconds:", timerHours * 3600);
             const { id } = await createRoomApi({
                 questionIds: selectedIds,
                 timerSeconds: timerHours * 3600,

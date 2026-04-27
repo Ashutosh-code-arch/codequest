@@ -32,7 +32,6 @@ export interface RoomQuestion {
 export interface Participant {
     id: string;
     userId: string;
-    username: string;
     isActive: boolean;
     joinedAt: string;
     leftAt: string | null;

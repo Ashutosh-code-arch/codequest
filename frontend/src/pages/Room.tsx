@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useAuthStore } from "../store/authStore";
 import type { Room, Participant } from "../types";
@@ -52,19 +52,20 @@ export default function Room() {
     const [fullToast, setFullToast] = useState(false);
     const [roomLoaded, setRoomLoaded] = useState(false);
     const [language, setLanguage] = useState<LangKey>("JAVASCRIPT");
+    const leftRef = useRef(false);
 
     // ── Step 1: Load room ─────────────────────────────────────────────────
     const hasInvalidRoom = !roomId;
 
-    useEffect(() => {
-        // if (!roomId) {
-        //     // setError("No room ID in URL");
-        //     setError((prev) => prev ?? "No room ID in URL");
-        //     setLoading(false);
-        //     return;
-        // }
+    function leaveRoom() {
+        if (leftRef.current) return; // already left — don't send twice
+        leftRef.current = true;
+        socket.emit("room:leave", { roomId: roomId! });
+    }
 
+    useEffect(() => {
         if (hasInvalidRoom) return;
+        // handleResetBeforeFetch();
         let cancelled = false;
 
         async function fetchRoom() {
@@ -75,10 +76,11 @@ export default function Room() {
                 setLanguage(r.language as LangKey);
                 setParticipants(r.participants ?? []);
                 setTimer(r.timerSeconds);
-                setRoomLoaded(true); // ← triggers second effect
+                setRoomLoaded(true);
             } catch {
                 if (cancelled) return;
                 setError("Room not found or you do not have access.");
+                setRoom(null);
             } finally {
                 if (!cancelled) setLoading(false);
             }
@@ -108,6 +110,7 @@ export default function Room() {
         console.log("✅ Socket effect running — room is loaded");
 
         socket.emit("room:join", { roomId });
+        leaveRoom();
 
         socket.on("room:user-joined", ({ user: u, participantCount }) => {
             void participantCount;
@@ -187,7 +190,10 @@ export default function Room() {
             <div className="min-h-screen bg-gray-900 flex items-center justify-center flex-col gap-4">
                 <p className="text-red-400 text-sm">{error}</p>
                 <button
-                    onClick={() => navigate("/dashboard")}
+                    onClick={() => {
+                        leaveRoom();
+                        navigate("/dashboard");
+                    }}
                     className="text-sm text-violet-400 hover:text-violet-300"
                 >
                     Back to dashboard
