@@ -16,12 +16,20 @@ interface ServerToClientEvents {
     "timer:sync": (data: { secondsRemaining: number }) => void;
     "room:time-up": () => void;
     error: (data: { code: string; message: string }) => void;
+    "yjs:message": (data: ArrayBuffer) => void;
+    "language:changed": (data: {
+        language: string;
+        starterCode: string;
+    }) => void;
 }
 
 interface ClientToServerEvents {
     "room:join": (data: { roomId: string }) => void;
     "room:leave": (data: { roomId: string }) => void;
     "timer:sync-request": (data: { roomId: string }) => void;
+    "yjs:message": (data: ArrayBuffer) => void;
+    "yjs:sync-request": () => void;
+    "language:change": (data: { roomId: string; language: string }) => void;
 }
 
 export const socket: Socket<ServerToClientEvents, ClientToServerEvents> = io(

@@ -4,6 +4,8 @@ import { useAuthStore } from "../store/authStore";
 import type { Room, Participant } from "../types";
 import { getRoomApi } from "../api/room";
 import { socket } from "../lib/sockets";
+import type { LangKey } from "../config/languages";
+import CollabEditor from "../components/Editor/CollabEditor";
 
 function formatTime(seconds: number): string {
     const m = Math.floor(seconds / 60);
@@ -48,16 +50,21 @@ export default function Room() {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState("");
     const [fullToast, setFullToast] = useState(false);
-    const [roomLoaded, setRoomLoaded] = useState(false); // ← ADD THIS
+    const [roomLoaded, setRoomLoaded] = useState(false);
+    const [language, setLanguage] = useState<LangKey>("JAVASCRIPT");
 
     // ── Step 1: Load room ─────────────────────────────────────────────────
-    useEffect(() => {
-        if (!roomId) {
-            setError("No room ID in URL");
-            setLoading(false);
-            return;
-        }
+    const hasInvalidRoom = !roomId;
 
+    useEffect(() => {
+        // if (!roomId) {
+        //     // setError("No room ID in URL");
+        //     setError((prev) => prev ?? "No room ID in URL");
+        //     setLoading(false);
+        //     return;
+        // }
+
+        if (hasInvalidRoom) return;
         let cancelled = false;
 
         async function fetchRoom() {
@@ -65,6 +72,7 @@ export default function Room() {
                 const r = await getRoomApi(roomId!);
                 if (cancelled) return;
                 setRoom(r);
+                setLanguage(r.language as LangKey);
                 setParticipants(r.participants ?? []);
                 setTimer(r.timerSeconds);
                 setRoomLoaded(true); // ← triggers second effect
@@ -80,6 +88,16 @@ export default function Room() {
         return () => {
             cancelled = true;
         };
+    }, [roomId]);
+
+    useEffect(() => {
+        if (!roomId) {
+            Promise.resolve().then(() => {
+                setError("No room ID in URL");
+                setLoading(false);
+            });
+            return;
+        }
     }, [roomId]);
 
     // ── Step 2: Socket — only runs after room is loaded ───────────────────
@@ -126,6 +144,10 @@ export default function Room() {
             setTimer(secondsRemaining),
         );
 
+        socket.on("language:changed", ({ language: lang }) => {
+            setLanguage(lang as LangKey);
+        });
+
         socket.on("room:time-up", () => {
             alert("Time is up! The session has ended.");
             navigate("/dashboard");
@@ -145,6 +167,7 @@ export default function Room() {
             socket.off("room:full");
             socket.off("timer:tick");
             socket.off("timer:sync");
+            socket.off("language:changed");
             socket.off("room:time-up");
             socket.off("room:terminated");
             socket.off("error");
@@ -255,18 +278,14 @@ export default function Room() {
             {/* Body */}
             <div className="flex-1 flex overflow-hidden">
                 {/* Editor placeholder */}
-                <div className="flex-1 flex items-center justify-center bg-gray-900">
-                    <div className="text-center">
-                        <p className="text-gray-600 text-4xl mb-3 font-mono">
-                            {"{ }"}
-                        </p>
-                        <p className="text-gray-500 text-sm">
-                            Editor coming in F4
-                        </p>
-                        <p className="text-gray-600 text-xs mt-1">
-                            Chat in F5 · Video in F7
-                        </p>
-                    </div>
+                <div className="flex-1 flex overflow-hidden">
+                    <CollabEditor
+                        roomId={roomId!}
+                        userId={user?.id ?? ""}
+                        username={user?.username ?? ""}
+                        language={language}
+                        onLanguageChange={setLanguage}
+                    />
                 </div>
 
                 {/* Participants sidebar */}

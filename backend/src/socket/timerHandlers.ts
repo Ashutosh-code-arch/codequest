@@ -31,12 +31,38 @@ export function startRoomTimer(
         roomTimers.set(roomId, next);
         io.to(roomId).emit("timer:tick", { secondsRemaining: next });
 
+        // if (next <= 0) {
+        //     clearInterval(interval);
+        //     roomIntervals.delete(roomId);
+        //     roomTimers.delete(roomId);
+
+        //     io.to(roomId).emit("room:time-up");
+        // }
         if (next <= 0) {
             clearInterval(interval);
             roomIntervals.delete(roomId);
             roomTimers.delete(roomId);
 
             io.to(roomId).emit("room:time-up");
+
+            try {
+                // Save final snapshot before marking room ended
+                const { getOrCreateRoomDoc, saveSnapshot } =
+                    await import("./yjsHandlers");
+                const state = getOrCreateRoomDoc(roomId);
+                await saveSnapshot(roomId, state.doc);
+
+                await prisma.room.update({
+                    where: { id: roomId },
+                    data: { status: "ENDED", endedAt: new Date() },
+                });
+                logger.info(
+                    { roomId },
+                    "Room ended: timer expired, snapshot saved",
+                );
+            } catch (err) {
+                logger.error(err, "Failed to end room cleanly");
+            }
         }
 
         try {
