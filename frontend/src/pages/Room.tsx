@@ -7,6 +7,8 @@ import { socket } from "../lib/sockets";
 import type { LangKey } from "../config/languages";
 import CollabEditor from "../components/Editor/CollabEditor";
 import QuestionPanel from "../components/Editor/QuestionPanel";
+import { useChat } from "../hooks/useChat";
+import ChatPanel from "../components/Chat/ChatPanel";
 
 interface RoomUser {
     userId: string;
@@ -62,6 +64,13 @@ export default function Room() {
     const leftRef = useRef(false);
     const currentRoomIdRef = useRef<string | undefined>(undefined);
     const [showQuestions, setShowQuestions] = useState(true);
+    const [isChatOpen, setIsChatOpen] = useState(true);
+
+    const { messages, unreadCount, sendMessage, sendError } = useChat({
+        roomId: roomId ?? "",
+        userId: user?.id ?? "",
+        isPanelOpen: isChatOpen,
+    });
 
     // ── Step 1: Load room ─────────────────────────────────────────────────
     const hasInvalidRoom = !roomId;
@@ -363,43 +372,8 @@ export default function Room() {
                     />
                 </div>
 
-                {/* Participants sidebar */}
-                {/* <aside className="w-52 bg-gray-800 border-l border-gray-700 flex flex-col">
-                    <div className="px-3 py-3 border-b border-gray-700">
-                        <p className="text-xs font-medium text-gray-400 uppercase tracking-wider">
-                            Participants ({users.length}/{room?.maxUsers ?? 4})
-                        </p>
-                    </div>
-                    <div className="flex-1 py-2 overflow-y-auto">
-                        {users.map((u) => (
-                            <ParticipantAvatar
-                                key={u.userId}
-                                username={u.username}
-                                isOnline={u.isActive}
-                            />
-                        ))}
-                    </div>
-
-                    {room && room.questions.length > 0 && (
-                        <div className="border-t border-gray-700 p-3">
-                            <p className="text-xs font-medium text-gray-400 uppercase tracking-wider mb-2">
-                                Questions
-                            </p>
-                            <div className="space-y-1.5">
-                                {room.questions.map((rq) => (
-                                    <div
-                                        key={rq.id}
-                                        className="text-xs text-gray-400 hover:text-gray-200 cursor-pointer truncate transition"
-                                    >
-                                        {rq.title}
-                                    </div>
-                                ))}
-                            </div>
-                        </div>
-                    )}
-                </aside> */}
                 {/* Right — participants */}
-                <aside className="w-48 bg-gray-800 border-l border-gray-700 flex flex-col shrink-0">
+                {/* <aside className="w-48 bg-gray-800 border-l border-gray-700 flex flex-col shrink-0">
                     <div className="px-3 py-3 border-b border-gray-700 flex items-center justify-between">
                         <p className="text-xs font-medium text-gray-400 uppercase tracking-wider">
                             Participants ({users.length}/{room?.maxUsers ?? 4})
@@ -427,6 +401,118 @@ export default function Room() {
                             />
                         ))}
                     </div>
+                </aside> */}
+                <aside
+                    className={`flex flex-col bg-gray-800 border-l border-gray-700 shrink-0 transition-all ${
+                        isChatOpen ? "w-64" : "w-10"
+                    }`}
+                >
+                    {isChatOpen ? (
+                        <>
+                            {/* Participants strip at top of chat */}
+                            <div className="px-3 py-2 border-b border-gray-700 shrink-0">
+                                <div className="flex items-center justify-between mb-1.5">
+                                    <p className="text-xs font-medium text-gray-400 uppercase tracking-wider">
+                                        Participants ({users.length}/
+                                        {room?.maxUsers ?? 4})
+                                    </p>
+                                    {room && room.questions.length > 0 && (
+                                        <button
+                                            onClick={() =>
+                                                setShowQuestions((p) => !p)
+                                            }
+                                            className="text-xs text-gray-500 hover:text-gray-300 transition"
+                                            title={
+                                                showQuestions
+                                                    ? "Hide questions"
+                                                    : "Show questions"
+                                            }
+                                        >
+                                            {showQuestions ? "◂" : "▸"}
+                                        </button>
+                                    )}
+                                    <button
+                                        onClick={() => setIsChatOpen(false)}
+                                        className="text-gray-600 hover:text-gray-400 transition"
+                                        title="Collapse chat"
+                                    >
+                                        <svg
+                                            className="w-3.5 h-3.5"
+                                            fill="none"
+                                            stroke="currentColor"
+                                            viewBox="0 0 24 24"
+                                        >
+                                            <path
+                                                strokeLinecap="round"
+                                                strokeLinejoin="round"
+                                                strokeWidth={2}
+                                                d="M9 5l7 7-7 7"
+                                            />
+                                        </svg>
+                                    </button>
+                                </div>
+                                <div className="flex-1 py-2 overflow-y-auto">
+                                    {users.map((u) => (
+                                        <ParticipantAvatar
+                                            key={u.userId}
+                                            username={u.username}
+                                            isOnline={u.isActive}
+                                        />
+                                    ))}
+                                </div>
+                            </div>
+
+                            {/* Chat panel */}
+                            <div className="flex-1 overflow-hidden">
+                                <ChatPanel
+                                    messages={messages}
+                                    userId={user?.id ?? ""}
+                                    sendError={sendError}
+                                    onSend={sendMessage}
+                                />
+                            </div>
+                        </>
+                    ) : (
+                        // Collapsed state — show toggle button + unread badge
+                        <div className="flex flex-col items-center pt-3 gap-3">
+                            <button
+                                onClick={() => setIsChatOpen(true)}
+                                className="text-gray-500 hover:text-gray-300 transition"
+                                title="Open chat"
+                            >
+                                <svg
+                                    className="w-4 h-4"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    viewBox="0 0 24 24"
+                                >
+                                    <path
+                                        strokeLinecap="round"
+                                        strokeLinejoin="round"
+                                        strokeWidth={2}
+                                        d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"
+                                    />
+                                </svg>
+                            </button>
+                            {unreadCount > 0 && (
+                                <div className="w-5 h-5 rounded-full bg-violet-600 flex items-center justify-center">
+                                    <span className="text-white text-xs font-bold leading-none">
+                                        {unreadCount > 9 ? "9+" : unreadCount}
+                                    </span>
+                                </div>
+                            )}
+                            {/* Rotated label */}
+                            <span
+                                className="text-xs text-gray-600 font-medium tracking-wider"
+                                style={{
+                                    writingMode: "vertical-rl",
+                                    transform: "rotate(180deg)",
+                                }}
+                            >
+                                CHAT
+                            </span>
+                        </div>
+                    )}
                 </aside>
             </div>
 

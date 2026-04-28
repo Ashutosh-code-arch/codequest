@@ -1,5 +1,6 @@
 import { logger } from "../lib/logger";
 import { prisma } from "../lib/prisma";
+import { broadcastSystemMessage, sendChatHistory } from "./chatHandlers";
 import { getRoomTimer, startRoomTimer } from "./timerHandlers";
 import { TypedServer, TypedSocket } from "./types";
 
@@ -74,6 +75,12 @@ export function registerRoomHandlers(io: TypedServer, socket: TypedSocket) {
                 participantCount: activeCount,
             });
 
+            // Send chat history to the joining user
+            await sendChatHistory(socket, roomId);
+
+            // Broadcast join system message to everyone in the room
+            broadcastSystemMessage(io, roomId, `${username} joined the room`);
+
             // Send current timer to joiner
             const remaining = getRoomTimer(roomId);
             if (remaining !== null) {
@@ -131,6 +138,9 @@ async function handleLeave(
 
         await socket.leave(roomId);
         socket.data.roomId = "";
+
+        // Broadcast leave system message
+        broadcastSystemMessage(io, roomId, `${userName} left the room`);
 
         const remaining = await prisma.roomParticipant.count({
             where: { roomId, isActive: true },

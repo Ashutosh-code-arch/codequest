@@ -72,10 +72,12 @@ export interface TestCase {
 }
 export interface ChatMessage {
     id: string;
+    roomId: string;
     userId: string;
     username: string;
     content: string;
     createdAt: string;
+    type: "message" | "system";
 }
 export interface ExecutionResult {
     stdout: string;

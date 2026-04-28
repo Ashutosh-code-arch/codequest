@@ -1,5 +1,15 @@
 import type { Socket, Server } from "socket.io";
 
+export interface ChatMessagePayload {
+    id: string;
+    roomId: string;
+    userId: string;
+    username: string;
+    content: string;
+    createdAt: string;
+    type: "message" | "system";
+}
+
 export interface ServerToClientEvents {
     "room:user-joined": (data: {
         user: { id: string; username: string };
@@ -27,6 +37,8 @@ export interface ServerToClientEvents {
             isActive: boolean;
         }>;
     }) => void;
+    "chat:new-message": (data: ChatMessagePayload) => void;
+    "chat:history": (data: ChatMessagePayload[]) => void;
     error: (data: { code: string; message: string }) => void;
 }
 
@@ -37,6 +49,7 @@ export interface ClientToServerEvents {
     "yjs:message": (data: ArrayBuffer) => void;
     "yjs:sync-request": () => void;
     "language:change": (data: { roomId: string; language: string }) => void;
+    "chat:message": (data: { roomId: string; content: string }) => void;
 }
 
 export interface SocketData {

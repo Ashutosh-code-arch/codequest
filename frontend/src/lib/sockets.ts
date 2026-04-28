@@ -28,6 +28,8 @@ interface ServerToClientEvents {
             isActive: boolean;
         }>;
     }) => void;
+    "chat:new-message": (data: import("../types").ChatMessage) => void;
+    "chat:history": (data: import("../types").ChatMessage[]) => void;
 }
 
 interface ClientToServerEvents {
@@ -37,6 +39,7 @@ interface ClientToServerEvents {
     "yjs:message": (data: ArrayBuffer) => void;
     "yjs:sync-request": () => void;
     "language:change": (data: { roomId: string; language: string }) => void;
+    "chat:message": (data: { roomId: string; content: string }) => void;
 }
 
 export const socket: Socket<ServerToClientEvents, ClientToServerEvents> = io(
