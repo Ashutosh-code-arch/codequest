@@ -50,10 +50,23 @@ export function registerRoomHandlers(io: TypedServer, socket: TypedSocket) {
             // Join socket room
             await socket.join(roomId);
             socket.data.roomId = roomId; // store for disconnect handler
+            const activeParticipants = await prisma.roomParticipant.findMany({
+                where: { roomId, isActive: true },
+                include: { user: { select: { id: true, username: true } } },
+            });
 
             // Tell others in the room
-            const activeCount = await prisma.roomParticipant.count({
-                where: { roomId, isActive: true },
+            // const activeCount = await prisma.roomParticipant.count({
+            //     where: { roomId, isActive: true },
+            // });
+            const activeCount = activeParticipants.length;
+
+            socket.emit("room:existing-participants", {
+                participants: activeParticipants.map((p) => ({
+                    userId: p.userId,
+                    username: p.user.username,
+                    isActive: true,
+                })),
             });
 
             socket.to(roomId).emit("room:user-joined", {
@@ -64,9 +77,11 @@ export function registerRoomHandlers(io: TypedServer, socket: TypedSocket) {
             // Send current timer to joiner
             const remaining = getRoomTimer(roomId);
             if (remaining !== null) {
+                // Timer already running — sync current value to joining user
                 socket.emit("timer:sync", { secondsRemaining: remaining });
             } else {
-                // First person to join - start the timer
+                // No timer running — this is the first join ever for this room
+                // Use timerSeconds from DB (the original duration)
                 startRoomTimer(io, roomId, room.timerSeconds);
             }
 

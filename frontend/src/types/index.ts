@@ -21,12 +21,24 @@ export interface Room {
     endedAt: string | null;
     creator: { id: string; username: string };
     participants: Participant[];
-    questions: Question[];
+    questions: RoomQuestion[];
 }
 
 export interface RoomQuestion {
+    roomId: string;
     questionId: string;
-    question: string;
+    addedAt: string;
+    question: {
+        id: string;
+        title: string;
+        description: string;
+        difficulty: string;
+        tags: string[];
+        isActive: boolean;
+        createdById: string;
+        createdAt: string;
+        updatedAt: string;
+    };
 }
 
 export interface Participant {

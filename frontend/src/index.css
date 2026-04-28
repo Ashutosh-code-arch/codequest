@@ -10,33 +10,39 @@
 /* ── Y.js remote cursor styling ─────────────────────────────────────────── */
 
 /* The blinking cursor line */
-.yRemoteSelectionHead {
-    position: relative;
-    border-left: 2px solid;
-    border-color: inherit;
-    margin-left: -1px;
-    height: 100%;
+/* Remote user text selection highlight */
+.yRemoteSelection {
+    background-color: rgb(250, 129, 0, 0.3);
+    border-radius: 2px;
 }
 
-/* Username label that floats above the cursor */
+/* The cursor line itself */
+.yRemoteSelectionHead {
+    position: relative;
+    border-left: 2px solid orange;
+    border-top: 2px solid orange;
+    border-bottom: 2px solid orange;
+    height: 100%;
+    box-sizing: border-box;
+}
+
+/* Username label above cursor */
 .yRemoteSelectionHead::after {
     content: attr(data-name);
     position: absolute;
-    top: -1.4em;
+    top: -1.6em;
     left: -2px;
     padding: 2px 6px;
     border-radius: 3px 3px 3px 0;
     font-size: 11px;
     font-weight: 500;
+    line-height: 1.4;
     white-space: nowrap;
     color: #fff;
-    background-color: inherit;
+    background-color: inherit; /* inherits border-color set by y-monaco */
+    border-color: inherit;
     font-family: ui-sans-serif, system-ui, sans-serif;
     pointer-events: none;
-    z-index: 100;
-}
-
-/* The translucent selection highlight */
-.yRemoteSelection {
-    opacity: 0.3;
+    z-index: 1000;
+    user-select: none;
 }

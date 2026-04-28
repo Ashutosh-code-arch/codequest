@@ -20,6 +20,13 @@ export interface ServerToClientEvents {
         language: string;
         starterCode: string;
     }) => void;
+    "room:existing-participants": (data: {
+        participants: Array<{
+            userId: string;
+            username: string;
+            isActive: boolean;
+        }>;
+    }) => void;
     error: (data: { code: string; message: string }) => void;
 }
 

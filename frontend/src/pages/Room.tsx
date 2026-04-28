@@ -1,11 +1,18 @@
 import { useEffect, useRef, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useAuthStore } from "../store/authStore";
-import type { Room, Participant } from "../types";
+import type { Room } from "../types";
 import { getRoomApi } from "../api/room";
 import { socket } from "../lib/sockets";
 import type { LangKey } from "../config/languages";
 import CollabEditor from "../components/Editor/CollabEditor";
+import QuestionPanel from "../components/Editor/QuestionPanel";
+
+interface RoomUser {
+    userId: string;
+    username: string;
+    isActive: boolean;
+}
 
 function formatTime(seconds: number): string {
     const m = Math.floor(seconds / 60);
@@ -45,7 +52,7 @@ export default function Room() {
     const { user } = useAuthStore();
 
     const [room, setRoom] = useState<Room | null>(null);
-    const [participants, setParticipants] = useState<Participant[]>([]);
+    const [users, setUsers] = useState<RoomUser[]>([]);
     const [timer, setTimer] = useState<number | null>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState("");
@@ -53,9 +60,18 @@ export default function Room() {
     const [roomLoaded, setRoomLoaded] = useState(false);
     const [language, setLanguage] = useState<LangKey>("JAVASCRIPT");
     const leftRef = useRef(false);
+    const currentRoomIdRef = useRef<string | undefined>(undefined);
+    const [showQuestions, setShowQuestions] = useState(true);
 
     // ── Step 1: Load room ─────────────────────────────────────────────────
     const hasInvalidRoom = !roomId;
+
+    useEffect(() => {
+        if (currentRoomIdRef.current !== roomId) {
+            leftRef.current = false;
+            currentRoomIdRef.current = roomId;
+        }
+    }, [roomId]);
 
     function leaveRoom() {
         if (leftRef.current) return; // already left — don't send twice
@@ -65,7 +81,8 @@ export default function Room() {
 
     useEffect(() => {
         if (hasInvalidRoom) return;
-        // handleResetBeforeFetch();
+
+        leftRef.current = false;
         let cancelled = false;
 
         async function fetchRoom() {
@@ -74,13 +91,25 @@ export default function Room() {
                 if (cancelled) return;
                 setRoom(r);
                 setLanguage(r.language as LangKey);
-                setParticipants(r.participants ?? []);
                 setTimer(r.timerSeconds);
+                const initialUsers: RoomUser[] = (r.participants ?? []).map(
+                    (p) => ({
+                        userId: p.userId,
+                        username: p.user?.username ?? p.userId,
+                        isActive: p.isActive,
+                    }),
+                );
+                setUsers(initialUsers);
                 setRoomLoaded(true);
-            } catch {
+            } catch (err) {
                 if (cancelled) return;
-                setError("Room not found or you do not have access.");
-                setRoom(null);
+                const msg = (
+                    err as {
+                        response?: { data?: { error?: { message?: string } } };
+                    }
+                )?.response?.data?.error?.message;
+                setError(msg ?? "Room not found or access denied.");
+                // setRoom(null);
             } finally {
                 if (!cancelled) setLoading(false);
             }
@@ -92,95 +121,132 @@ export default function Room() {
         };
     }, [roomId]);
 
-    useEffect(() => {
-        if (!roomId) {
-            Promise.resolve().then(() => {
-                setError("No room ID in URL");
-                setLoading(false);
-            });
-            return;
-        }
-    }, [roomId]);
+    // useEffect(() => {
+    //     if (!roomId) {
+    //         Promise.resolve().then(() => {
+    //             setError("No room ID in URL");
+    //             setLoading(false);
+    //         });
+    //         return;
+    //     }
+    // }, [roomId]);
 
     // ── Step 2: Socket — only runs after room is loaded ───────────────────
     useEffect(() => {
         // roomLoaded is false on first render, true after fetchRoom succeeds
         if (!roomLoaded || !roomId) return;
 
-        console.log("✅ Socket effect running — room is loaded");
-
         socket.emit("room:join", { roomId });
-        leaveRoom();
+        // leaveRoom();
+        // Server sends current participant list to this joiner
+        function onExistingParticipants(data: {
+            participants: Array<{
+                userId: string;
+                username: string;
+                isActive: boolean;
+            }>;
+        }) {
+            // Merge server list with what REST already gave us
+            // Server list is authoritative — use it to replace
+            setUsers(data.participants);
+        }
+        // Server sends current participant list to this joiner
 
-        socket.on("room:user-joined", ({ user: u, participantCount }) => {
-            void participantCount;
-            setParticipants((prev) => {
-                if (prev.find((p) => p.userId === u.id)) return prev;
+        // A different user joined — add them
+        function onUserJoined(data: {
+            user: { id: string; username: string };
+            participantCount: number;
+        }) {
+            setUsers((prev) => {
+                // Don't add if already in list
+                if (prev.find((u) => u.userId === data.user.id)) return prev;
                 return [
                     ...prev,
                     {
-                        id: u.id,
-                        roomId: roomId,
-                        userId: u.id,
+                        userId: data.user.id,
+                        username: data.user.username,
                         isActive: true,
-                        joinedAt: new Date().toISOString(),
-                        leftAt: null,
-                        user: { id: u.id, username: u.username },
                     },
                 ];
             });
-        });
+            void data.participantCount;
+        }
 
-        socket.on("room:user-left", ({ userId }) => {
-            setParticipants((prev) => prev.filter((p) => p.userId !== userId));
-        });
+        function onUserLeft(data: {
+            userId: string;
+            username: string;
+            participantCount: number;
+        }) {
+            setUsers((prev) => prev.filter((u) => u.userId !== data.userId));
+            void data.participantCount;
+        }
 
-        socket.on("room:full", () => {
+        function onRoomFull() {
             setFullToast(true);
             setTimeout(() => setFullToast(false), 4000);
-        });
+        }
 
-        socket.on("timer:tick", ({ secondsRemaining }) =>
-            setTimer(secondsRemaining),
-        );
-        socket.on("timer:sync", ({ secondsRemaining }) =>
-            setTimer(secondsRemaining),
-        );
+        function onTimerTick(data: { secondsRemaining: number }) {
+            setTimer(data.secondsRemaining);
+        }
 
-        socket.on("language:changed", ({ language: lang }) => {
-            setLanguage(lang as LangKey);
-        });
+        function onTimerSync(data: { secondsRemaining: number }) {
+            setTimer(data.secondsRemaining);
+        }
 
-        socket.on("room:time-up", () => {
+        function onTimeUp() {
             alert("Time is up! The session has ended.");
             navigate("/dashboard");
-        });
+        }
 
-        socket.on("room:terminated", () => {
+        function onTerminated() {
             alert("This room was terminated by an admin.");
             navigate("/dashboard");
-        });
+        }
 
-        socket.on("error", ({ message }) => setError(message));
+        function onLanguageChanged(data: { language: string }) {
+            setLanguage(data.language as LangKey);
+        }
+
+        function onSocketError(data: { code: string; message: string }) {
+            if (data.code === "ROOM_ENDED") {
+                setError("This room has ended.");
+            }
+        }
+
+        socket.on("room:existing-participants", onExistingParticipants);
+        socket.on("room:user-joined", onUserJoined);
+        socket.on("room:user-left", onUserLeft);
+        socket.on("room:full", onRoomFull);
+        socket.on("timer:tick", onTimerTick);
+        socket.on("timer:sync", onTimerSync);
+        socket.on("room:time-up", onTimeUp);
+        socket.on("room:terminated", onTerminated);
+        socket.on("language:changed", onLanguageChanged);
+        socket.on("error", onSocketError);
 
         return () => {
-            socket.emit("room:leave", { roomId });
-            socket.off("room:user-joined");
-            socket.off("room:user-left");
-            socket.off("room:full");
-            socket.off("timer:tick");
-            socket.off("timer:sync");
-            socket.off("language:changed");
-            socket.off("room:time-up");
-            socket.off("room:terminated");
-            socket.off("error");
+            leaveRoom();
+            socket.off("room:existing-participants", onExistingParticipants);
+            socket.off("room:user-joined", onUserJoined);
+            socket.off("room:user-left", onUserLeft);
+            socket.off("room:full", onRoomFull);
+            socket.off("timer:tick", onTimerTick);
+            socket.off("timer:sync", onTimerSync);
+            socket.off("room:time-up", onTimeUp);
+            socket.off("room:terminated", onTerminated);
+            socket.off("language:changed", onLanguageChanged);
+            socket.off("error", onSocketError);
         };
     }, [roomId, roomLoaded, navigate]);
 
     if (loading) {
         return (
             <div className="min-h-screen bg-gray-900 flex items-center justify-center">
-                <p className="text-gray-400 text-sm">Loading room...</p>
+                <div className="text-center">
+                    <div className="w-6 h-6 border-2 border-violet-500 border-t-transparent rounded-full animate-spin mx-auto mb-3" />
+                    <p className="text-gray-500 text-sm">Loading room...</p>
+                </div>
             </div>
         );
     }
@@ -190,10 +256,7 @@ export default function Room() {
             <div className="min-h-screen bg-gray-900 flex items-center justify-center flex-col gap-4">
                 <p className="text-red-400 text-sm">{error}</p>
                 <button
-                    onClick={() => {
-                        leaveRoom();
-                        navigate("/dashboard");
-                    }}
+                    onClick={() => navigate("/dashboard")}
                     className="text-sm text-violet-400 hover:text-violet-300"
                 >
                     Back to dashboard
@@ -201,9 +264,9 @@ export default function Room() {
             </div>
         );
     }
-
-    const timerColor =
-        timer !== null && timer < 300 ? "text-red-400" : "text-gray-300";
+    const timerRed = timer !== null && timer < 300;
+    // const timerColor =
+    //     timer !== null && timer < 300 ? "text-red-400" : "text-gray-300";
 
     return (
         <div className="h-screen bg-gray-900 flex flex-col overflow-hidden">
@@ -212,7 +275,7 @@ export default function Room() {
                 <div className="flex items-center gap-3">
                     <button
                         onClick={() => {
-                            socket.emit("room:leave", { roomId: roomId! });
+                            leaveRoom();
                             navigate("/dashboard");
                         }}
                         className="text-gray-400 hover:text-gray-200 transition"
@@ -234,7 +297,7 @@ export default function Room() {
                     <div>
                         <p className="text-sm font-medium text-gray-200">
                             Room{" "}
-                            <span className="font-mono text-violet-400">
+                            <span className="font-mono text-violet-400 text-xs">
                                 {roomId?.slice(0, 10)}...
                             </span>
                         </p>
@@ -268,11 +331,11 @@ export default function Room() {
                     </button>
 
                     {timer !== null && (
-                        <div
-                            className={`font-mono text-sm font-medium ${timerColor}`}
+                        <span
+                            className={`font-mono text-sm font-semibold ${timerRed ? "text-red-400 animate-pulse" : "text-gray-300"}`}
                         >
                             {formatTime(timer)}
-                        </div>
+                        </span>
                     )}
 
                     <span className="text-xs text-gray-500">
@@ -283,8 +346,14 @@ export default function Room() {
 
             {/* Body */}
             <div className="flex-1 flex overflow-hidden">
+                {/* Left — question panel */}
+                {showQuestions && room && room.questions.length > 0 && (
+                    <div className="w-80 shrink-0 overflow-hidden">
+                        <QuestionPanel questions={room.questions} />
+                    </div>
+                )}
                 {/* Editor placeholder */}
-                <div className="flex-1 flex overflow-hidden">
+                <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
                     <CollabEditor
                         roomId={roomId!}
                         userId={user?.id ?? ""}
@@ -295,24 +364,22 @@ export default function Room() {
                 </div>
 
                 {/* Participants sidebar */}
-                <aside className="w-52 bg-gray-800 border-l border-gray-700 flex flex-col">
+                {/* <aside className="w-52 bg-gray-800 border-l border-gray-700 flex flex-col">
                     <div className="px-3 py-3 border-b border-gray-700">
                         <p className="text-xs font-medium text-gray-400 uppercase tracking-wider">
-                            Participants ({participants.length}/
-                            {room?.maxUsers ?? 4})
+                            Participants ({users.length}/{room?.maxUsers ?? 4})
                         </p>
                     </div>
                     <div className="flex-1 py-2 overflow-y-auto">
-                        {participants.map((p) => (
+                        {users.map((u) => (
                             <ParticipantAvatar
-                                key={p.userId}
-                                username={p.user.username}
-                                isOnline={p.isActive}
+                                key={u.userId}
+                                username={u.username}
+                                isOnline={u.isActive}
                             />
                         ))}
                     </div>
 
-                    {/* Questions list */}
                     {room && room.questions.length > 0 && (
                         <div className="border-t border-gray-700 p-3">
                             <p className="text-xs font-medium text-gray-400 uppercase tracking-wider mb-2">
@@ -330,6 +397,36 @@ export default function Room() {
                             </div>
                         </div>
                     )}
+                </aside> */}
+                {/* Right — participants */}
+                <aside className="w-48 bg-gray-800 border-l border-gray-700 flex flex-col shrink-0">
+                    <div className="px-3 py-3 border-b border-gray-700 flex items-center justify-between">
+                        <p className="text-xs font-medium text-gray-400 uppercase tracking-wider">
+                            Participants ({users.length}/{room?.maxUsers ?? 4})
+                        </p>
+                        {room && room.questions.length > 0 && (
+                            <button
+                                onClick={() => setShowQuestions((p) => !p)}
+                                className="text-xs text-gray-500 hover:text-gray-300 transition"
+                                title={
+                                    showQuestions
+                                        ? "Hide questions"
+                                        : "Show questions"
+                                }
+                            >
+                                {showQuestions ? "◂" : "▸"}
+                            </button>
+                        )}
+                    </div>
+                    <div className="flex-1 py-2 overflow-y-auto">
+                        {users.map((u) => (
+                            <ParticipantAvatar
+                                key={u.userId}
+                                username={u.username}
+                                isOnline={u.isActive}
+                            />
+                        ))}
+                    </div>
                 </aside>
             </div>
 
