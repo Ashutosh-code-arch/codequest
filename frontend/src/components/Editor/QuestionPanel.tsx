@@ -1,13 +1,23 @@
 import ReactMarkdown from "react-markdown";
 import type { RoomQuestion } from "../../types";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 interface QuestionPanelProps {
     questions: RoomQuestion[];
+    onSelect: (questionId: string) => void;
 }
 
-export default function QuestionPanel({ questions }: QuestionPanelProps) {
+export default function QuestionPanel({
+    questions,
+    onSelect,
+}: QuestionPanelProps) {
     const [activeIdx, setActiveIdx] = useState(0);
+
+    useEffect(() => {
+        if (questions.length > 0) {
+            onSelect(questions[0].questionId);
+        }
+    }, [questions, onSelect]);
 
     if (!questions.length) return null;
 
@@ -21,7 +31,10 @@ export default function QuestionPanel({ questions }: QuestionPanelProps) {
                     {questions.map((rq, i) => (
                         <button
                             key={rq.questionId}
-                            onClick={() => setActiveIdx(i)}
+                            onClick={() => {
+                                setActiveIdx(i);
+                                onSelect(rq.questionId);
+                            }}
                             className={`text-xs px-4 py-2.5 whitespace-nowrap transition border-b-2 ${
                                 activeIdx === i
                                     ? "text-violet-400 border-violet-400"

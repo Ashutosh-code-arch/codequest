@@ -15,6 +15,7 @@ interface CollabEditorProps {
     username: string;
     language: LangKey;
     onLanguageChange: (lang: LangKey) => void;
+    onCodeChange?: (code: string) => void;
 }
 
 export default function CollabEditor({
@@ -23,6 +24,7 @@ export default function CollabEditor({
     username,
     language,
     onLanguageChange,
+    onCodeChange,
 }: CollabEditorProps) {
     const editorRef = useRef<Monaco.editor.IStandaloneCodeEditor | null>(null);
     const { bindEditor, synced } = useCollabEditor({
@@ -34,6 +36,15 @@ export default function CollabEditor({
     const handleMount: OnMount = (editor) => {
         editorRef.current = editor;
         bindEditor(editor);
+
+        // Listen for model content changes to expose current code
+        editor.onDidChangeModelContent(() => {
+            const code = editor.getValue();
+            onCodeChange?.(code);
+        });
+
+        // Also expose initial code on mount:
+        onCodeChange?.(editor.getValue());
 
         // Auto-focus editor on mount
         editor.focus();

@@ -49,6 +49,15 @@ const submitSchema = z.object({
     roomId: z.string().optional(),
 });
 
+function normalizeOutput(s: string): string {
+    return s
+        .trim() // remove leading/trailing whitespace
+        .replace(/\r\n/g, "\n") // normalize Windows line endings
+        .replace(/[ \t]+/g, " ") // collapse multiple spaces/tabs to single space
+        .replace(/\n\s+/g, "\n") // remove leading whitespace on each line
+        .replace(/\s+\n/g, "\n"); // remove trailing whitespace on each line
+}
+
 // ── POST /api/v1/execute ─────────────────────────────────────────────────
 // "Run" button — arbitrary stdin, no test cases
 router.post("/execute", executionLimiter, async (req, res) => {
@@ -147,8 +156,12 @@ router.post("/submit", executionLimiter, async (req, res) => {
                         // Trim both sides before comparing — trailing newlines cause false failures
                         const passed =
                             execResult.status === "Accepted" &&
-                            execResult.stdout.trim() ===
-                                tc.expectedOutput.trim();
+                            normalizeOutput(execResult.stdout) ===
+                                normalizeOutput(tc.expectedOutput);
+                        // const passed =
+                        //     execResult.status === "Accepted" &&
+                        //     execResult.stdout.trim() ===
+                        //         tc.expectedOutput.trim();
 
                         return {
                             testCaseId: tc.id,

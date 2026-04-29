@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useAuthStore } from "../store/authStore";
-import type { Room } from "../types";
+import type { Room, SupportedLanguage } from "../types";
 import { getRoomApi } from "../api/room";
 import { socket } from "../lib/sockets";
 import type { LangKey } from "../config/languages";
@@ -9,6 +9,7 @@ import CollabEditor from "../components/Editor/CollabEditor";
 import QuestionPanel from "../components/Editor/QuestionPanel";
 import { useChat } from "../hooks/useChat";
 import ChatPanel from "../components/Chat/ChatPanel";
+import ExecutionPanel from "../components/Editor/ExecutionPanel";
 
 interface RoomUser {
     userId: string;
@@ -65,6 +66,10 @@ export default function Room() {
     const currentRoomIdRef = useRef<string | undefined>(undefined);
     const [showQuestions, setShowQuestions] = useState(true);
     const [isChatOpen, setIsChatOpen] = useState(true);
+    const [selectedQuestionId, setSelectedQuestionId] = useState<string | null>(
+        null,
+    );
+    const [currentCode, setCurrentCode] = useState("");
 
     const { messages, unreadCount, sendMessage, sendError } = useChat({
         roomId: roomId ?? "",
@@ -99,6 +104,9 @@ export default function Room() {
                 const r = await getRoomApi(roomId!);
                 if (cancelled) return;
                 setRoom(r);
+                if (r.questions && r.questions.length > 0) {
+                    setSelectedQuestionId(r.questions[0].questionId);
+                }
                 setLanguage(r.language as LangKey);
                 setTimer(r.timerSeconds);
                 const initialUsers: RoomUser[] = (r.participants ?? []).map(
@@ -358,50 +366,44 @@ export default function Room() {
                 {/* Left — question panel */}
                 {showQuestions && room && room.questions.length > 0 && (
                     <div className="w-80 shrink-0 overflow-hidden">
-                        <QuestionPanel questions={room.questions} />
+                        <QuestionPanel
+                            questions={room.questions}
+                            onSelect={setSelectedQuestionId}
+                        />
                     </div>
                 )}
                 {/* Editor placeholder */}
                 <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
-                    <CollabEditor
-                        roomId={roomId!}
-                        userId={user?.id ?? ""}
-                        username={user?.username ?? ""}
-                        language={language}
-                        onLanguageChange={setLanguage}
-                    />
+                    {/* Editor takes 65% of height */}
+                    <div
+                        className="flex-1 overflow-hidden"
+                        style={{ minHeight: 0 }}
+                    >
+                        {/* Your CollabEditor here — add onCodeChange prop */}
+                        <CollabEditor
+                            roomId={roomId!}
+                            userId={user?.id ?? ""}
+                            username={user?.username ?? ""}
+                            language={language}
+                            onLanguageChange={setLanguage}
+                            onCodeChange={setCurrentCode}
+                        />
+                    </div>
+
+                    {/* Execution panel takes remaining height */}
+                    <div className="h-64 shrink-0">
+                        <ExecutionPanel
+                            code={currentCode}
+                            language={
+                                (room?.language as SupportedLanguage) ??
+                                "JAVASCRIPT"
+                            }
+                            questionId={selectedQuestionId}
+                            roomId={roomId}
+                        />
+                    </div>
                 </div>
 
-                {/* Right — participants */}
-                {/* <aside className="w-48 bg-gray-800 border-l border-gray-700 flex flex-col shrink-0">
-                    <div className="px-3 py-3 border-b border-gray-700 flex items-center justify-between">
-                        <p className="text-xs font-medium text-gray-400 uppercase tracking-wider">
-                            Participants ({users.length}/{room?.maxUsers ?? 4})
-                        </p>
-                        {room && room.questions.length > 0 && (
-                            <button
-                                onClick={() => setShowQuestions((p) => !p)}
-                                className="text-xs text-gray-500 hover:text-gray-300 transition"
-                                title={
-                                    showQuestions
-                                        ? "Hide questions"
-                                        : "Show questions"
-                                }
-                            >
-                                {showQuestions ? "◂" : "▸"}
-                            </button>
-                        )}
-                    </div>
-                    <div className="flex-1 py-2 overflow-y-auto">
-                        {users.map((u) => (
-                            <ParticipantAvatar
-                                key={u.userId}
-                                username={u.username}
-                                isOnline={u.isActive}
-                            />
-                        ))}
-                    </div>
-                </aside> */}
                 <aside
                     className={`flex flex-col bg-gray-800 border-l border-gray-700 shrink-0 transition-all ${
                         isChatOpen ? "w-64" : "w-10"

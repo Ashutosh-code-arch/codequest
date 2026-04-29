@@ -2,6 +2,7 @@ export type ROLE = "ADMIN" | "USER";
 export type Language = "JAVASCRIPT" | "PYTHON" | "JAVA" | "CPP" | "C";
 export type RoomStatus = "ACTIVE" | "ENDED" | "TERMINATED";
 export type Difficulty = "EASY" | "MEDIUM" | "HARD";
+export type SupportedLanguage = "JAVASCRIPT" | "PYTHON" | "JAVA" | "CPP" | "C";
 
 export interface User {
     id: string;
