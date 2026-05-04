@@ -39,6 +39,9 @@ export interface ServerToClientEvents {
     }) => void;
     "chat:new-message": (data: ChatMessagePayload) => void;
     "chat:history": (data: ChatMessagePayload[]) => void;
+    "webrtc:signal": (data: WebRTCSignal) => void;
+    "webrtc:existing-peers": (data: { peers: PeerInfo[] }) => void;
+    "webrtc:peer-left": (data: { userId: string; socketId: string }) => void;
     error: (data: { code: string; message: string }) => void;
 }
 
@@ -50,6 +53,9 @@ export interface ClientToServerEvents {
     "yjs:sync-request": () => void;
     "language:change": (data: { roomId: string; language: string }) => void;
     "chat:message": (data: { roomId: string; content: string }) => void;
+    "webrtc:join": (data: { roomId: string }) => void;
+    "webrtc:leave": (data: { roomId: string }) => void;
+    "webrtc:signal": (data: WebRTCSignalPayload) => void;
 }
 
 export interface SocketData {
@@ -72,3 +78,25 @@ export type TypedSocket = Socket<
     Record<string, never>,
     SocketData
 >;
+
+export type RTCSignalData =
+    | { type: "offer"; sdp: string }
+    | { type: "answer"; sdp: string }
+    | { type: "ice-candidate"; candidate: RTCIceCandidateInit };
+
+export interface WebRTCSignal {
+    from: string;
+    userId: string;
+    signal: RTCSignalData;
+}
+
+export interface WebRTCSignalPayload {
+    to: string;
+    signal: RTCSignalData;
+}
+
+export interface PeerInfo {
+    socketId: string;
+    userId: string;
+    username: string;
+}

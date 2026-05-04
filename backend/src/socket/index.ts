@@ -6,6 +6,7 @@ import { logger } from "../lib/logger";
 import { registerRoomHandlers } from "./roomHandlers";
 import { registerYjsHandlers } from "./yjsHandlers";
 import { registerChatHandlers } from "./chatHandlers";
+import { registerWebRTCHandlers } from "./webrtcHandlers";
 
 const STARTER_CODE: Record<string, string> = {
     JAVASCRIPT: `function solution() {
@@ -81,6 +82,7 @@ export function initSocket(server: Server) {
         registerRoomHandlers(io, socket);
         registerYjsHandlers(io, socket);
         registerChatHandlers(io, socket);
+        registerWebRTCHandlers(io, socket);
 
         // Language change — persist to DB + broadcast to room
         socket.on("language:change", async ({ roomId, language }) => {

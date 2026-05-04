@@ -30,6 +30,11 @@ interface ServerToClientEvents {
     }) => void;
     "chat:new-message": (data: import("../types").ChatMessage) => void;
     "chat:history": (data: import("../types").ChatMessage[]) => void;
+    "webrtc:signal": (data: import("../types/webrtc").WebRTCSignal) => void;
+    "webrtc:existing-peers": (data: {
+        peers: import("../types/webrtc").PeerInfo[];
+    }) => void;
+    "webrtc:peer-left": (data: { userId: string; socketId: string }) => void;
 }
 
 interface ClientToServerEvents {
@@ -40,6 +45,12 @@ interface ClientToServerEvents {
     "yjs:sync-request": () => void;
     "language:change": (data: { roomId: string; language: string }) => void;
     "chat:message": (data: { roomId: string; content: string }) => void;
+    "webrtc:join": (data: { roomId: string }) => void;
+    "webrtc:leave": (data: { roomId: string }) => void;
+    "webrtc:signal": (data: {
+        to: string;
+        signal: import("../types/webrtc").RTCSignalData;
+    }) => void;
 }
 
 export const socket: Socket<ServerToClientEvents, ClientToServerEvents> = io(
