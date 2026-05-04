@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import { socket } from "../lib/sockets";
 import { ICE_SERVERS } from "../config/webrtc";
-import type { PeerInfo, WebRTCSignal, RTCSignalData } from "../types/webrtc";
+import type { PeerInfo, WebRTCSignal } from "../types/webrtc";
 
 export interface RemoteStream {
     socketId: string;
