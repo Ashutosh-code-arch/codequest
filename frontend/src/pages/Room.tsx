@@ -10,6 +10,8 @@ import QuestionPanel from "../components/Editor/QuestionPanel";
 import { useChat } from "../hooks/useChat";
 import ChatPanel from "../components/Chat/ChatPanel";
 import ExecutionPanel from "../components/Editor/ExecutionPanel";
+import { useWebRTC } from "../hooks/useWebRTC";
+import VideoGrid from "../components/Video/VideoGrid";
 
 interface RoomUser {
     userId: string;
@@ -70,11 +72,25 @@ export default function Room() {
         null,
     );
     const [currentCode, setCurrentCode] = useState("");
+    const [isVideoOpen, setIsVideoOpen] = useState(false);
 
     const { messages, unreadCount, sendMessage, sendError } = useChat({
         roomId: roomId ?? "",
         userId: user?.id ?? "",
         isPanelOpen: isChatOpen,
+    });
+
+    const {
+        localStream,
+        remoteStreams,
+        isMuted,
+        isVideoOff,
+        permError,
+        toggleMute,
+        toggleVideo,
+    } = useWebRTC({
+        roomId: roomId ?? "",
+        enabled: isVideoOpen && roomLoaded,
     });
 
     // ── Step 1: Load room ─────────────────────────────────────────────────
@@ -346,6 +362,30 @@ export default function Room() {
                         </svg>
                         Copy ID
                     </button>
+                    <button
+                        onClick={() => setIsVideoOpen((p) => !p)}
+                        className={
+                            "text-xs border px-3 py-1.5 rounded-lg transition flex items-center gap-1.5 " +
+                            (isVideoOpen
+                                ? "border-violet-500 text-violet-400"
+                                : "border-gray-600 text-gray-400 hover:text-gray-200")
+                        }
+                    >
+                        <svg
+                            className="w-3.5 h-3.5"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                        >
+                            <path
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                strokeWidth={2}
+                                d="M15 10l4.553-2.069A1 1 0 0121 8.882v6.236a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"
+                            />
+                        </svg>
+                        {isVideoOpen ? "Hide video" : "Video"}
+                    </button>
 
                     {timer !== null && (
                         <span
@@ -374,6 +414,20 @@ export default function Room() {
                 )}
                 {/* Editor placeholder */}
                 <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
+                    {isVideoOpen && (
+                        <div className="h-44 shrink-0 border-b border-gray-700 overflow-hidden">
+                            <VideoGrid
+                                localStream={localStream}
+                                localUsername={user?.username ?? ""}
+                                isMuted={isMuted}
+                                isVideoOff={isVideoOff}
+                                remoteStreams={remoteStreams}
+                                permError={permError}
+                                onToggleMute={toggleMute}
+                                onToggleVideo={toggleVideo}
+                            />
+                        </div>
+                    )}
                     {/* Editor takes 65% of height */}
                     <div
                         className="flex-1 overflow-hidden"
