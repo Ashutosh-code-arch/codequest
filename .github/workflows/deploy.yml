@@ -28,20 +28,26 @@ jobs:
             - name: Typecheck frontend
               working-directory: ./frontend
               run: npm ci && npx tsc --noEmit
+            - name: Debug TS Config (backend)
+              working-directory: ./backend
+              run: npx tsc --showConfig
+            - name: Debug TS Config (frontend)
+              working-directory: ./frontend
+              run: npx tsc --showConfig
 
     deploy-backend:
         name: Deploy to Render
         needs: typecheck
-        if: github.ref == 'ref/heads/main' && github.event_name == 'push'
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
         runs-on: ubuntu-latest
         steps:
             - name: Trigger Render deploy hook
-              run: curl -fsSL _X POST "${{ secrets.RENDER_DEPLOY_HOOK_URL }}"
+              run: curl -fsSL -X POST "${{ secrets.RENDER_DEPLOY_HOOK_URL }}"
 
     deploy-frontend:
         name: Deploy to Vercel
         needs: typecheck
-        if: github.ref == 'ref/heads/main' && github.event_name == 'push'
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
         runs-on: ubuntu-latest
         steps:
             - uses: actions/checkout@v4
