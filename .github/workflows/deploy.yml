@@ -23,11 +23,10 @@ jobs:
 
             - name: Typecheck backend
               working-directory: ./backend
-              run: npm ci && npx tsc --noEmit
-
+              run: npm ci && npx tsc --noEmit -p backend/tsconfig.json
             - name: Typecheck frontend
               working-directory: ./frontend
-              run: npm ci && npx tsc --noEmit
+              run: npm ci && npx tsc --noEmit -p frontend/tsconfig.json
             - name: Debug TS Config (backend)
               working-directory: ./backend
               run: npx tsc --showConfig
