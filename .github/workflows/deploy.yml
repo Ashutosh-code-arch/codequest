@@ -121,7 +121,8 @@ jobs:
 
             - name: Typecheck frontend
               working-directory: ./frontend
-              run: npx tsc --noEmit --pretty false -p tsconfig.json
+              #   run: npx tsc --noEmit --pretty false -p tsconfig.json
+              run: npx tsc -b tsconfig.app.json
 
             - name: Debug frontend config
               working-directory: ./frontend
