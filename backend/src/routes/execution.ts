@@ -143,7 +143,7 @@ router.post("/submit", executionLimiter, async (req, res) => {
         for (let i = 0; i < testCases.length; i += CHUNK_SIZE) {
             const chunk = testCases.slice(i, i + CHUNK_SIZE);
             const chunkResults = await Promise.all(
-                chunk.map(async (tc) => {
+                chunk.map(async (tc: any) => {
                     try {
                         const execResult = await judge0Execute({
                             code,

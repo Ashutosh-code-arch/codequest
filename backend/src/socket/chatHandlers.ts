@@ -26,7 +26,7 @@ export async function sendChatHistory(socket: TypedSocket, roomId: string) {
             include: { user: { select: { username: true } } },
         });
 
-        const payload: ChatMessagePayload[] = messages.map((m) => ({
+        const payload: ChatMessagePayload[] = messages.map((m: any) => ({
             id: m.id,
             roomId: m.roomId,
             userId: m.userId,

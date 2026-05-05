@@ -43,7 +43,7 @@ router.post("/", async (req, res) => {
         }
 
         // Create room + creator as first participant in one transaction
-        const room = await prisma.$transaction(async (tx) => {
+        const room = await prisma.$transaction(async (tx: any) => {
             const r = await tx.room.create({
                 data: {
                     creatorId: req.user!.id,
@@ -123,7 +123,7 @@ router.post("/:id/join", async (req, res) => {
     const userId = req.user!.id;
 
     try {
-        const result = await prisma.$transaction(async (tx) => {
+        const result = await prisma.$transaction(async (tx: any) => {
             const room = await tx.room.findUnique({
                 where: { id: roomId },
                 include: { participants: { where: { isActive: true } } },
@@ -149,7 +149,7 @@ router.post("/:id/join", async (req, res) => {
             }
 
             const alreadyIn = room.participants.some(
-                (p) => p.userId === userId,
+                (p: any) => p.userId === userId,
             );
             if (!alreadyIn && room.participants.length >= room.maxUsers) {
                 return {
@@ -268,7 +268,7 @@ router.get("/", async (req, res) => {
             },
             take: 20,
         });
-        const rooms = participations.map((p) => p.room);
+        const rooms = participations.map((p: any) => p.room);
         res.json({ success: true, data: { rooms } });
     } catch (err) {
         logger.error(err, "GET /rooms failed");

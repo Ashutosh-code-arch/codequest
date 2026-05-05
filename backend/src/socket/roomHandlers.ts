@@ -31,7 +31,7 @@ export function registerRoomHandlers(io: TypedServer, socket: TypedSocket) {
             }
 
             const alreadyIn = room.participants.some(
-                (p) => p.userId === userId,
+                (p: any) => p.userId === userId,
             );
 
             if (!alreadyIn && room.participants.length >= room.maxUsers) {
@@ -63,7 +63,7 @@ export function registerRoomHandlers(io: TypedServer, socket: TypedSocket) {
             const activeCount = activeParticipants.length;
 
             socket.emit("room:existing-participants", {
-                participants: activeParticipants.map((p) => ({
+                participants: activeParticipants.map((p: any) => ({
                     userId: p.userId,
                     username: p.user.username,
                     isActive: true,
