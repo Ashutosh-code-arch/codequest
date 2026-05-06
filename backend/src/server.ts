@@ -10,6 +10,7 @@ import adminRoutes from "./routes/admin";
 import roomRoutes from "./routes/room";
 import executionRoutes from "./routes/execution";
 import { initSocket } from "./socket";
+import historyRoutes from "./routes/history";
 
 const app = express();
 const httpServer = createServer(app);
@@ -42,6 +43,7 @@ app.use("/api/v1/auth", authRoutes);
 app.use("/api/v1/admin", adminRoutes);
 app.use("/api/v1/rooms", roomRoutes);
 app.use("/api/v1", executionRoutes);
+app.use("/api/v1/history", historyRoutes);
 
 // ------------------------ Health -----------------------
 app.get("/health", async (_req, res) => {

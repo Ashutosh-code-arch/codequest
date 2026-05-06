@@ -73,6 +73,7 @@ export default function Room() {
     );
     const [currentCode, setCurrentCode] = useState("");
     const [isVideoOpen, setIsVideoOpen] = useState(false);
+    const [socketDisconnected, setSocketDisconnected] = useState(false);
 
     const { messages, unreadCount, sendMessage, sendError } = useChat({
         roomId: roomId ?? "",
@@ -257,6 +258,8 @@ export default function Room() {
         socket.on("room:terminated", onTerminated);
         socket.on("language:changed", onLanguageChanged);
         socket.on("error", onSocketError);
+        socket.on("connect", () => setSocketDisconnected(false));
+        socket.on("disconnect", () => setSocketDisconnected(true));
 
         return () => {
             leaveRoom();
@@ -270,6 +273,8 @@ export default function Room() {
             socket.off("room:terminated", onTerminated);
             socket.off("language:changed", onLanguageChanged);
             socket.off("error", onSocketError);
+            socket.off("connect");
+            socket.off("disconnect");
         };
     }, [roomId, roomLoaded, navigate]);
 
@@ -400,6 +405,32 @@ export default function Room() {
                     </span>
                 </div>
             </header>
+            {socketDisconnected && (
+                <div className="bg-amber-900/80 border-b border-amber-700 px-4 py-2 flex items-center gap-2 shrink-0">
+                    <svg
+                        className="w-3.5 h-3.5 text-amber-400 animate-spin"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                    >
+                        <circle
+                            className="opacity-25"
+                            cx="12"
+                            cy="12"
+                            r="10"
+                            stroke="currentColor"
+                            strokeWidth="4"
+                        />
+                        <path
+                            className="opacity-75"
+                            fill="currentColor"
+                            d="M4 12a8 8 0 018-8v8H4z"
+                        />
+                    </svg>
+                    <span className="text-amber-200 text-xs font-medium">
+                        Connection lost — reconnecting...
+                    </span>
+                </div>
+            )}
 
             {/* Body */}
             <div className="flex-1 flex overflow-hidden">

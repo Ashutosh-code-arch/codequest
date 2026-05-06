@@ -5,20 +5,8 @@ import Register from "./pages/Register";
 import Dashboard from "./pages/Dashboard";
 import AdminPanel from "./pages/AdminPanel";
 import Room from "./pages/Room";
-
-// Placeholder — replaced in later phases
-function ComingSoon({ label }: { label: string }) {
-    return (
-        <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-            <div className="text-center">
-                <p className="text-gray-300 text-6xl mb-4">{"{ }"}</p>
-                <p className="text-gray-400 text-sm font-mono">
-                    {label} — coming soon
-                </p>
-            </div>
-        </div>
-    );
-}
+import History from "./pages/History";
+import NotFound from "./pages/NotFound";
 
 export default function App() {
     return (
@@ -32,10 +20,7 @@ export default function App() {
                 <Route element={<ProtectedRoute />}>
                     <Route path="/dashboard" element={<Dashboard />} />
                     <Route path="/room/:id" element={<Room />} />
-                    <Route
-                        path="/history"
-                        element={<ComingSoon label="History" />}
-                    />
+                    <Route path="/history" element={<History />} />
                 </Route>
 
                 {/* Admin only */}
@@ -44,10 +29,7 @@ export default function App() {
                 </Route>
 
                 <Route path="/" element={<Navigate to="/login" replace />} />
-                <Route
-                    path="*"
-                    element={<ComingSoon label="404 — page not found" />}
-                />
+                <Route path="*" element={<NotFound />} />
             </Routes>
         </BrowserRouter>
     );
