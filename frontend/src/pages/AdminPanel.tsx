@@ -88,6 +88,8 @@ function QuestionForm({
     onSave: (q: Question) => void;
     onClose: () => void;
 }) {
+    const LANGUAGES = ["JAVASCRIPT", "PYTHON", "JAVA", "CPP", "C"] as const;
+
     const [form, setForm] = useState<CreateQuestionPayload>({
         title: initial?.title ?? "",
         description: initial?.description ?? "",
@@ -97,6 +99,14 @@ function QuestionForm({
     const [tagInput, setTagInput] = useState("");
     const [error, setError] = useState("");
     const [saving, setSaving] = useState(false);
+
+    const [starterCode, setStarterCode] = useState<Record<string, string>>(
+        (initial?.starterCode as Record<string, string>) ?? {},
+    );
+    const [driverCode, setDriverCode] = useState<Record<string, string>>(
+        (initial?.driverCode as Record<string, string>) ?? {},
+    );
+    const [activeLang, setActiveLang] = useState<string>("JAVASCRIPT");
 
     function addTag() {
         const t = tagInput.trim().toLowerCase();
@@ -118,8 +128,12 @@ function QuestionForm({
         setError("");
         try {
             const saved = initial
-                ? await updateQuestionApi(initial.id, form)
-                : await createQuestionApi(form);
+                ? await updateQuestionApi(initial.id, {
+                      ...form,
+                      starterCode,
+                      driverCode,
+                  })
+                : await createQuestionApi({ ...form, starterCode, driverCode });
             onSave(saved);
         } catch (err: unknown) {
             setError(
@@ -229,6 +243,59 @@ function QuestionForm({
                         Add
                     </button>
                 </div>
+            </div>
+
+            <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Starter code (what user sees in editor)
+                </label>
+                <div className="flex gap-1 mb-2">
+                    {LANGUAGES.map((l) => (
+                        <button
+                            key={l}
+                            type="button"
+                            onClick={() => setActiveLang(l)}
+                            className={`text-xs px-2 py-1 rounded font-medium transition ${
+                                activeLang === l
+                                    ? "bg-violet-600 text-white"
+                                    : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                            }`}
+                        >
+                            {l}
+                        </button>
+                    ))}
+                </div>
+                <textarea
+                    rows={6}
+                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-xs font-mono outline-none focus:border-violet-500 resize-y"
+                    value={starterCode[activeLang] ?? ""}
+                    onChange={(e) =>
+                        setStarterCode((p) => ({
+                            ...p,
+                            [activeLang]: e.target.value,
+                        }))
+                    }
+                    placeholder={`Starter code for ${activeLang}...`}
+                />
+            </div>
+
+            <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Driver code (backend wrapping — use {"{{USER_CODE}}"}{" "}
+                    placeholder)
+                </label>
+                <textarea
+                    rows={8}
+                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-xs font-mono outline-none focus:border-violet-500 resize-y"
+                    value={driverCode[activeLang] ?? ""}
+                    onChange={(e) =>
+                        setDriverCode((p) => ({
+                            ...p,
+                            [activeLang]: e.target.value,
+                        }))
+                    }
+                    placeholder={`Driver template for ${activeLang}...\nUse {{USER_CODE}} where the solution goes`}
+                />
             </div>
 
             {error && (

@@ -6,6 +6,7 @@ import { logger } from "../lib/logger";
 import { z } from "zod";
 import { judge0Execute } from "../services/executions/judge0";
 import { SupportedLanguage } from "../services/executions/types";
+import { LangKey, wrapWithDriver } from "../services/executions/driver";
 
 const router = Router();
 router.use(authenticate);
@@ -40,6 +41,7 @@ const executeSchema = z.object({
     code: z.string().min(1, "Code is required").max(65536, "Code too long"),
     language: z.enum(SUPPORTED_LANGUAGES),
     stdin: z.string().max(65536).optional(),
+    questionId: z.string().uuid().optional(),
 });
 
 const submitSchema = z.object({
@@ -74,11 +76,28 @@ router.post("/execute", executionLimiter, async (req, res) => {
         return;
     }
 
-    const { code, language, stdin } = result.data;
+    // For run — also check if there's a driver for this question
+    // executeSchema needs questionId as optional field
+    const { code, language, stdin, questionId } = result.data;
 
     try {
+        let finalCode = code;
+        if (questionId) {
+            const question = await prisma.question.findUnique({
+                where: { id: questionId },
+                select: { driverCode: true },
+            });
+            const drivers = question?.driverCode as Record<
+                string,
+                string
+            > | null;
+            const driver = drivers?.[language];
+            if (driver)
+                finalCode = wrapWithDriver(code, driver, language as LangKey);
+        }
+
         const execResult = await judge0Execute({
-            code,
+            code: finalCode,
             language: language as SupportedLanguage,
             stdin,
         });
@@ -119,10 +138,16 @@ router.post("/submit", executionLimiter, async (req, res) => {
 
     try {
         // Fetch all test cases for this question
-        const testCases = await prisma.testCase.findMany({
-            where: { questionId },
-            orderBy: { id: "asc" },
-        });
+        const [testCases, question] = await Promise.all([
+            prisma.testCase.findMany({
+                where: { questionId },
+                orderBy: { id: "asc" },
+            }),
+            prisma.question.findUnique({
+                where: { id: questionId },
+                select: { driverCode: true },
+            }),
+        ]);
 
         if (!testCases.length) {
             res.status(400).json({
@@ -136,9 +161,25 @@ router.post("/submit", executionLimiter, async (req, res) => {
             return;
         }
 
+        // Get driver for this language
+        const drivers = question?.driverCode as Record<string, string> | null;
+        const driver = drivers?.[language];
+
+        // If driver exists, wrap user code. Otherwise send as-is (raw mode)
+        const finalCode = driver
+            ? wrapWithDriver(code, driver, language as LangKey)
+            : code;
+
+        // Log what's actually being sent
+        logger.debug(
+            { finalCodeLength: finalCode.length, hasDriver: !!driver },
+            "Final code for Judge0",
+        );
+
+        const allResults = [];
+
         // Run all test cases in parallel (max 5 concurrent)
         const CHUNK_SIZE = 5;
-        const allResults = [];
 
         for (let i = 0; i < testCases.length; i += CHUNK_SIZE) {
             const chunk = testCases.slice(i, i + CHUNK_SIZE);
@@ -146,7 +187,7 @@ router.post("/submit", executionLimiter, async (req, res) => {
                 chunk.map(async (tc: any) => {
                     try {
                         const execResult = await judge0Execute({
-                            code,
+                            code: finalCode,
                             language: language as SupportedLanguage,
                             stdin: tc.input,
                             timeLimit: tc.timeLimit,
@@ -158,10 +199,6 @@ router.post("/submit", executionLimiter, async (req, res) => {
                             execResult.status === "Accepted" &&
                             normalizeOutput(execResult.stdout) ===
                                 normalizeOutput(tc.expectedOutput);
-                        // const passed =
-                        //     execResult.status === "Accepted" &&
-                        //     execResult.stdout.trim() ===
-                        //         tc.expectedOutput.trim();
 
                         return {
                             testCaseId: tc.id,

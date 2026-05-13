@@ -5,7 +5,9 @@ import type { Room, SupportedLanguage } from "../types";
 import { getRoomApi } from "../api/room";
 import { socket } from "../lib/sockets";
 import type { LangKey } from "../config/languages";
-import CollabEditor from "../components/Editor/CollabEditor";
+import CollabEditor, {
+    type CollabEditorHandle,
+} from "../components/Editor/CollabEditor";
 import QuestionPanel from "../components/Editor/QuestionPanel";
 import { useChat } from "../hooks/useChat";
 import ChatPanel from "../components/Chat/ChatPanel";
@@ -71,9 +73,11 @@ export default function Room() {
     const [selectedQuestionId, setSelectedQuestionId] = useState<string | null>(
         null,
     );
-    const [currentCode, setCurrentCode] = useState("");
+    // const [currentCode, setCurrentCode] = useState("");
     const [isVideoOpen, setIsVideoOpen] = useState(false);
     const [socketDisconnected, setSocketDisconnected] = useState(false);
+    const codeRef = useRef<string>("");
+    const collabEditorRef = useRef<CollabEditorHandle>(null);
 
     const { messages, unreadCount, sendMessage, sendError } = useChat({
         roomId: roomId ?? "",
@@ -155,15 +159,22 @@ export default function Room() {
         };
     }, [roomId]);
 
-    // useEffect(() => {
-    //     if (!roomId) {
-    //         Promise.resolve().then(() => {
-    //             setError("No room ID in URL");
-    //             setLoading(false);
-    //         });
-    //         return;
-    //     }
-    // }, [roomId]);
+    useEffect(() => {
+        if (!selectedQuestionId || !room) return;
+        const rq = room.questions.find(
+            (q) => q.questionId === selectedQuestionId,
+        );
+        if (!rq) return;
+
+        const starters = rq.question.starterCode as Record<
+            string,
+            string
+        > | null;
+        const starter = starters?.[language];
+        if (starter && collabEditorRef.current) {
+            collabEditorRef.current.insertStarterCode(starter);
+        }
+    }, [selectedQuestionId, language]);
 
     // ── Step 2: Socket — only runs after room is loaded ───────────────────
     useEffect(() => {
@@ -171,7 +182,6 @@ export default function Room() {
         if (!roomLoaded || !roomId) return;
 
         socket.emit("room:join", { roomId });
-        // leaveRoom();
         // Server sends current participant list to this joiner
         function onExistingParticipants(data: {
             participants: Array<{
@@ -471,14 +481,17 @@ export default function Room() {
                             username={user?.username ?? ""}
                             language={language}
                             onLanguageChange={setLanguage}
-                            onCodeChange={setCurrentCode}
+                            // onCodeChange={setCurrentCode}
+                            codeRef={codeRef}
+                            ref={collabEditorRef}
                         />
                     </div>
 
                     {/* Execution panel takes remaining height */}
                     <div className="h-64 shrink-0">
                         <ExecutionPanel
-                            code={currentCode}
+                            // code={currentCode}
+                            codeRef={codeRef}
                             language={
                                 (room?.language as SupportedLanguage) ??
                                 "JAVASCRIPT"

@@ -98,6 +98,8 @@ model Question {
   createdById String
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
+  driverCode  Json? // { JAVASCRIPT: "...", PYTHON: "...", JAVA: "...", CPP: "...", C: "..." }
+  starterCode Json? // what user sees in editor per language
 
   testCases    TestCase[]
   roomQuestion RoomQuestion[]

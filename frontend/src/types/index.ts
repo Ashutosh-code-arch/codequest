@@ -39,6 +39,8 @@ export interface RoomQuestion {
         createdById: string;
         createdAt: string;
         updatedAt: string;
+        driverCode?: Record<string, string>;
+        starterCode?: Record<string, string>;
     };
 }
 
@@ -60,6 +62,8 @@ export interface Question {
     description: string;
     difficulty: Difficulty;
     tags: string[];
+    driverCode?: Record<string, string>;
+    starterCode?: Record<string, string>;
 }
 
 export interface TestCase {

@@ -162,38 +162,21 @@ export function useCollabEditor({
         );
     }
 
-    return { bindEditor, synced, color: colorRef };
+    function insertStarterCode(code: string) {
+        if (!ydocRef.current) return;
+        const yText = ydocRef.current.getText("monaco");
+        if (yText.toString().trim() !== "") return; // don't overwrite existing code
+        ydocRef.current.transact(() => {
+            yText.delete(0, yText.length);
+            yText.insert(0, code);
+        });
+    }
+
+    return {
+        bindEditor,
+        synced,
+        color: colorRef,
+        getYDoc: () => ydocRef.current,
+        insertStarterCode,
+    };
 }
-
-// function injectCursorStyle(userId: string, color: string) {
-//   const styleId = `cursor-style-${userId}`
-//   if (document.getElementById(styleId)) return  // already injected
-
-//   const style = document.createElement('style')
-//   style.id = styleId
-//   style.textContent = `
-//     .yRemoteSelection-${userId} {
-//       background-color: ${color}40;
-//     }
-//     .yRemoteSelectionHead-${userId} {
-//       border-color: ${color};
-//     }
-//     .yRemoteSelectionHead-${userId}::after {
-//       content: attr(data-name);
-//       position: absolute;
-//       top: -1.6em;
-//       left: -2px;
-//       padding: 2px 6px;
-//       border-radius: 3px 3px 3px 0;
-//       font-size: 11px;
-//       font-weight: 600;
-//       white-space: nowrap;
-//       color: #fff;
-//       background-color: ${color};
-//       font-family: ui-sans-serif, system-ui, sans-serif;
-//       pointer-events: none;
-//       z-index: 1000;
-//     }
-//   `
-//   document.head.appendChild(style)
-// }

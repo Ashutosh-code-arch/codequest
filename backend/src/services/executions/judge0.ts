@@ -52,6 +52,27 @@ export async function judge0Execute(
         memoryLimit = 256,
     } = opts;
 
+    function normalizeStdin(raw: string): string {
+        let s = raw.trim();
+
+        // Unwrap if accidentally JSON-stringified: "\"0\"" → "0"
+        if (s.startsWith('"') && s.endsWith('"')) {
+            try {
+                const parsed = JSON.parse(s);
+                if (typeof parsed === "string") s = parsed;
+            } catch {
+                // not valid JSON — leave as-is
+            }
+        }
+
+        // Replace literal \n escape sequences with real newlines
+        s = s.replace(/\\n/g, "\n").replace(/\\t/g, "\t");
+
+        return s;
+    }
+
+    const normalizedStdin = normalizeStdin(stdin);
+
     const languageId = LANGUAGE_IDS[language];
     if (!languageId) {
         throw new Error(`Unsupported language: ${language}`);
@@ -60,7 +81,7 @@ export async function judge0Execute(
     const body = {
         source_code: b64encode(code),
         language_id: languageId,
-        stdin: b64encode(stdin),
+        stdin: b64encode(normalizedStdin),
         cpu_time_limit: timeLimit / 1000, // Judge0 uses seconds
         memory_limit: memoryLimit * 1024, // Judge0 uses KB
         enable_base64: true,

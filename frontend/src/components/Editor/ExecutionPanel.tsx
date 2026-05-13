@@ -10,7 +10,8 @@ import type { SupportedLanguage } from "../../types";
 type PanelTab = "run" | "submit";
 
 interface ExecutionPanelProps {
-    code: string;
+    codeRef: { current: string };
+    // code: string;
     language: SupportedLanguage;
     questionId: string | null; // null if no question selected
     roomId?: string;
@@ -117,7 +118,8 @@ function TestCaseRow({
 
 // ── Main panel ────────────────────────────────────────────────────────────
 export default function ExecutionPanel({
-    code,
+    // code,
+    codeRef,
     language,
     questionId,
     roomId,
@@ -133,6 +135,7 @@ export default function ExecutionPanel({
     const abortRef = useRef<AbortController | null>(null);
 
     async function handleRun() {
+        const code = codeRef.current;
         if (!code.trim()) {
             setRunError("Editor is empty");
             return;
@@ -157,6 +160,19 @@ export default function ExecutionPanel({
     }
 
     async function handleSubmit() {
+        const code = codeRef.current;
+        // console.log(
+        //     "Submit fired — code length:",
+        //     code.length,
+        //     "peek:",
+        //     code.slice(0, 80),
+        // );
+        console.log("=== SUBMIT ===");
+        console.log("language:", language);
+        console.log("questionId:", questionId);
+        console.log("code:", code);
+        console.error("SUBMIT CODE:", JSON.stringify(code.slice(0, 500)));
+        console.error("SUBMIT CODE LENGTH:", code.length);
         if (!code.trim()) {
             setSubmitError("Editor is empty");
             return;

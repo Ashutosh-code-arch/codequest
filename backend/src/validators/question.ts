@@ -1,6 +1,7 @@
 import z from "zod";
 
 const difficulties = ["EASY", "MEDIUM", "HARD"] as const;
+const codeMapSchema = z.record(z.string().min(1), z.string().max(100000));
 
 export const createQuestionSchema = z.object({
     title: z.string().min(5, "Title must be at least 5 characters").max(200),
@@ -14,6 +15,8 @@ export const createQuestionSchema = z.object({
         .array(z.string().min(1).max(30))
         .min(1, "At least one tag required")
         .max(10, "Maximum 10 tags"),
+    starterCode: codeMapSchema.optional(),
+    driverCode: codeMapSchema.optional(),
 });
 
 export const updateQuestionSchema = createQuestionSchema.partial();

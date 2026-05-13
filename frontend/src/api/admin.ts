@@ -22,6 +22,8 @@ export interface CreateQuestionPayload {
     description: string;
     difficulty: "EASY" | "MEDIUM" | "HARD";
     tags: string[];
+    starterCode?: Record<string, string>;
+    driverCode?: Record<string, string>;
 }
 
 export interface CreateTestCasePayload {
