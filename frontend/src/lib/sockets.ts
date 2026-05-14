@@ -42,7 +42,8 @@ interface ClientToServerEvents {
     "room:leave": (data: { roomId: string }) => void;
     "timer:sync-request": (data: { roomId: string }) => void;
     "yjs:message": (data: ArrayBuffer) => void;
-    "yjs:sync-request": () => void;
+    // "yjs:sync-request": () => void;
+    "yjs:sync-request": (data?: { questionId?: string }) => void;
     "language:change": (data: { roomId: string; language: string }) => void;
     "chat:message": (data: { roomId: string; content: string }) => void;
     "webrtc:join": (data: { roomId: string }) => void;

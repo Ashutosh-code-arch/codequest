@@ -18,12 +18,16 @@ interface UseCollabEditorOptions {
     roomId: string;
     userId: string;
     username: string;
+    language: string;
+    questionId?: string;
 }
 
 export function useCollabEditor({
     roomId,
     userId,
     username,
+    language,
+    questionId,
 }: UseCollabEditorOptions) {
     const ydocRef = useRef<Y.Doc | null>(null);
     const awarenessRef = useRef<awarenessProtocol.Awareness | null>(null);
@@ -33,6 +37,9 @@ export function useCollabEditor({
 
     // Step 1 — create Y.Doc and awareness, set up socket message handler
     useEffect(() => {
+        bindingRef.current?.destroy();
+        ydocRef.current?.destroy();
+
         const ydoc = new Y.Doc();
         const awareness = new awarenessProtocol.Awareness(ydoc);
 
@@ -130,7 +137,7 @@ export function useCollabEditor({
         awareness.on("update", handleAwarenessUpdate);
 
         // ── Request current document state from server ─────────────────────────
-        socket.emit("yjs:sync-request");
+        socket.emit("yjs:sync-request", { questionId });
 
         return () => {
             socket.off("yjs:message", handleYjsMessage);
@@ -144,7 +151,7 @@ export function useCollabEditor({
             bindingRef.current?.destroy();
             ydoc.destroy();
         };
-    }, [roomId, userId, username]);
+    }, [roomId, userId, username, language, questionId]);
 
     // Step 2 — bind Y.Doc to Monaco editor instance
     function bindEditor(editor: Monaco.editor.IStandaloneCodeEditor) {

@@ -17,6 +17,7 @@ interface CollabEditorProps {
     onLanguageChange: (lang: LangKey) => void;
     onCodeChange?: (code: string) => void;
     codeRef: { current: string };
+    questionId?: string | null;
 }
 export interface CollabEditorHandle {
     insertStarterCode: (code: string) => void;
@@ -33,6 +34,8 @@ const CollabEditor = forwardRef<CollabEditorHandle, CollabEditorProps>(
                 roomId: props.roomId,
                 userId: props.userId,
                 username: props.username,
+                language: props.language,
+                questionId: props.questionId ?? undefined,
             });
 
         useImperativeHandle(ref, () => ({

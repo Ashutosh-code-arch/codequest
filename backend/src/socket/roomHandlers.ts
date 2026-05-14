@@ -51,15 +51,12 @@ export function registerRoomHandlers(io: TypedServer, socket: TypedSocket) {
             // Join socket room
             await socket.join(roomId);
             socket.data.roomId = roomId; // store for disconnect handler
+            socket.data.language = room.language; // ← store current language
             const activeParticipants = await prisma.roomParticipant.findMany({
                 where: { roomId, isActive: true },
                 include: { user: { select: { id: true, username: true } } },
             });
 
-            // Tell others in the room
-            // const activeCount = await prisma.roomParticipant.count({
-            //     where: { roomId, isActive: true },
-            // });
             const activeCount = activeParticipants.length;
 
             socket.emit("room:existing-participants", {
@@ -89,7 +86,7 @@ export function registerRoomHandlers(io: TypedServer, socket: TypedSocket) {
             } else {
                 // No timer running — this is the first join ever for this room
                 // Use timerSeconds from DB (the original duration)
-                startRoomTimer(io, roomId, room.timerSeconds);
+                startRoomTimer(io, roomId, room.timerSeconds, room.language);
             }
 
             logger.info(

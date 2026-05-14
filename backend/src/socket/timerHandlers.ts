@@ -14,6 +14,7 @@ export function startRoomTimer(
     io: TypedServer,
     roomId: string,
     durationSeconds: number,
+    language: string,
 ) {
     // Don't start if already running
     if (roomIntervals.has(roomId)) {
@@ -70,7 +71,7 @@ export function startRoomTimer(
             try {
                 const { getOrCreateRoomDoc, saveSnapshot } =
                     await import("./yjsHandlers");
-                const state = getOrCreateRoomDoc(roomId);
+                const state = await getOrCreateRoomDoc(roomId, language);
                 await saveSnapshot(roomId, state.doc);
                 logger.info({ roomId }, "Final snapshot saved");
             } catch (err) {

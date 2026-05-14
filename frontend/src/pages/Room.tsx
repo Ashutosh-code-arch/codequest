@@ -14,6 +14,7 @@ import ChatPanel from "../components/Chat/ChatPanel";
 import ExecutionPanel from "../components/Editor/ExecutionPanel";
 import { useWebRTC } from "../hooks/useWebRTC";
 import VideoGrid from "../components/Video/VideoGrid";
+import { api } from "../lib/api";
 
 interface RoomUser {
     userId: string;
@@ -73,7 +74,7 @@ export default function Room() {
     const [selectedQuestionId, setSelectedQuestionId] = useState<string | null>(
         null,
     );
-    // const [currentCode, setCurrentCode] = useState("");
+    const [ending, setEnding] = useState(false);
     const [isVideoOpen, setIsVideoOpen] = useState(false);
     const [socketDisconnected, setSocketDisconnected] = useState(false);
     const codeRef = useRef<string>("");
@@ -288,6 +289,18 @@ export default function Room() {
         };
     }, [roomId, roomLoaded, navigate]);
 
+    async function handleEndRoom() {
+        if (!window.confirm("End this session for everyone?")) return;
+        setEnding(true);
+        try {
+            await api.post(`/api/v1/rooms/${roomId}/end`);
+            navigate("/dashboard");
+        } catch {
+            setEnding(false);
+            alert("Failed to end room");
+        }
+    }
+
     if (loading) {
         return (
             <div className="min-h-screen bg-gray-900 flex items-center justify-center">
@@ -377,6 +390,30 @@ export default function Room() {
                         </svg>
                         Copy ID
                     </button>
+                    {room?.creator.id === user?.id && (
+                        <button
+                            onClick={handleEndRoom}
+                            disabled={ending}
+                            className="text-xs border border-red-800 text-red-400 hover:bg-red-900/20
+               px-3 py-1.5 rounded-lg transition flex items-center gap-1.5
+               disabled:opacity-40"
+                        >
+                            <svg
+                                className="w-3.5 h-3.5"
+                                fill="none"
+                                stroke="currentColor"
+                                viewBox="0 0 24 24"
+                            >
+                                <path
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                    strokeWidth={2}
+                                    d="M21 12a9 9 0 11-18 0 9 9 0 0118 0zM9 10h6M9 14h6"
+                                />
+                            </svg>
+                            {ending ? "Ending..." : "End room"}
+                        </button>
+                    )}
                     <button
                         onClick={() => setIsVideoOpen((p) => !p)}
                         className={
@@ -476,6 +513,7 @@ export default function Room() {
                     >
                         {/* Your CollabEditor here — add onCodeChange prop */}
                         <CollabEditor
+                            key={`${selectedQuestionId}-${language}`}
                             roomId={roomId!}
                             userId={user?.id ?? ""}
                             username={user?.username ?? ""}

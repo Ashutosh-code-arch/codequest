@@ -21,19 +21,59 @@ interface RoomYState {
 
 const roomYDocs = new Map<string, RoomYState>();
 
-function getOrCreateRoomDoc(roomId: string): RoomYState {
-    if (roomYDocs.has(roomId)) return roomYDocs.get(roomId)!;
+export function getRoomDocKey(
+    roomId: string,
+    language: string,
+    questionId?: string,
+): string {
+    return questionId
+        ? `${roomId}:${language}:${questionId}`
+        : `${roomId}:${language}`;
+}
+
+async function getOrCreateRoomDoc(
+    roomId: string,
+    language: string,
+    questionId?: string,
+): Promise<RoomYState> {
+    const key = getRoomDocKey(roomId, language, questionId);
+    if (roomYDocs.has(key)) return roomYDocs.get(key)!;
 
     const doc = new Y.Doc();
     const awareness = new awarenessProtocol.Awareness(doc);
 
+    // ── Restore from latest snapshot if one exists ─────────────────────────
+    try {
+        const snapshot = await prisma.codeSnapshot.findFirst({
+            where: {
+                roomId,
+                language: language as any,
+                questionId: questionId,
+            },
+            orderBy: { savedAt: "desc" },
+        });
+        if (snapshot && snapshot.code.trim()) {
+            // Apply the saved code into the Y.Doc before any client connects
+            doc.transact(() => {
+                const yText = doc.getText("monaco");
+                yText.delete(0, yText.length);
+                yText.insert(0, snapshot.code);
+            });
+        }
+    } catch (err) {
+        logger.error(err, "Failed to restore Y.js doc from snapshot");
+    }
+
     // Auto-save snapshot every 60 seconds
-    const saveTimer = setInterval(() => saveSnapshot(roomId, doc), 60_000);
+    const saveTimer = setInterval(
+        () => saveSnapshot(roomId, doc, language),
+        60_000,
+    );
 
     const state: RoomYState = { doc, awareness, saveTimer };
-    roomYDocs.set(roomId, state);
+    roomYDocs.set(key, state);
 
-    logger.debug({ roomId }, "Y.js doc created for room");
+    logger.debug({ roomId, language, key }, "Y.js doc created for room");
     return state;
 }
 
@@ -46,20 +86,29 @@ function destroyRoomDoc(roomId: string) {
     logger.debug({ roomId }, "Y.js doc destroyed");
 }
 
-async function saveSnapshot(roomId: string, doc: Y.Doc) {
+async function saveSnapshot(
+    roomId: string,
+    doc: Y.Doc,
+    language?: string,
+    questionId?: string,
+) {
     try {
         const code = doc.getText("monaco").toString();
+        if (!code.trim()) return;
         const roomData = await prisma.room.findUnique({
             where: { id: roomId },
             select: { language: true, status: true },
         });
-        if (!roomData || roomData.status !== "ACTIVE" || !code.trim()) return;
+        if (!roomData || roomData.status !== "ACTIVE") return;
+
+        const lang = language ?? roomData.language;
 
         await prisma.codeSnapshot.create({
             data: {
                 roomId,
+                questionId: questionId ?? null,
                 code,
-                language: roomData.language,
+                language: lang as any,
                 savedById: "system",
             },
         });
@@ -73,11 +122,14 @@ async function saveSnapshot(roomId: string, doc: Y.Doc) {
 
 export function registerYjsHandlers(_io: TypedServer, socket: TypedSocket) {
     // Client sends raw Y.js binary messages
-    socket.on("yjs:message", (data: ArrayBuffer) => {
+    socket.on("yjs:message", async (data: ArrayBuffer) => {
         const roomId = socket.data.roomId;
         if (!roomId) return;
 
-        const state = getOrCreateRoomDoc(roomId);
+        // Get current room language from DB (or cache it in socket.data)
+        const language = socket.data.language ?? "JAVASCRIPT";
+
+        const state = await getOrCreateRoomDoc(roomId, language);
         const arr = new Uint8Array(data);
         const decoder = decoding.createDecoder(arr);
         const msgType = decoding.readVarInt(decoder);
@@ -119,11 +171,14 @@ export function registerYjsHandlers(_io: TypedServer, socket: TypedSocket) {
     });
 
     // When user joins a room - send them the current document state
-    socket.on("yjs:sync-request", () => {
+    socket.on("yjs:sync-request", async (data?: { questionId?: string }) => {
         const roomId = socket.data.roomId;
         if (!roomId) return;
 
-        const state = getOrCreateRoomDoc(roomId);
+        const language = socket.data.language ?? "JAVASCRIPT";
+        const questionId = data?.questionId;
+
+        const state = await getOrCreateRoomDoc(roomId, language);
         const encoder = encoding.createEncoder();
         encoding.writeVarInt(encoder, MSG_SYNC);
         syncProtocol.writeSyncStep1(encoder, state.doc);
@@ -134,4 +189,4 @@ export function registerYjsHandlers(_io: TypedServer, socket: TypedSocket) {
     });
 }
 
-export { getOrCreateRoomDoc, destroyRoomDoc, saveSnapshot };
+export { getOrCreateRoomDoc, destroyRoomDoc, saveSnapshot, roomYDocs };

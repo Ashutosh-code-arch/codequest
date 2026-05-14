@@ -168,14 +168,16 @@ model ChatMessage {
 }
 
 model CodeSnapshot {
-  id        String   @id @default(uuid())
-  roomId    String?
-  code      String
-  language  Language
-  savedAt   DateTime @default(now())
-  savedById String
+  id         String   @id @default(uuid())
+  roomId     String?
+  questionId String?
+  code       String
+  language   Language
+  savedAt    DateTime @default(now())
+  savedById  String
 
   room Room? @relation(fields: [roomId], references: [id])
 
   @@index([roomId, savedAt])
+  @@index([roomId, questionId, language])
 }

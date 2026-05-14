@@ -345,4 +345,86 @@ router.patch("/:id/language", async (req, res) => {
     }
 });
 
+router.post("/:id/end", async (req, res) => {
+    const roomId = req.params.id;
+    const userId = req.user!.id;
+
+    try {
+        const room = await prisma.room.findUnique({
+            where: { id: roomId },
+            select: { creatorId: true, status: true },
+        });
+
+        if (!room) {
+            res.status(404).json({
+                success: false,
+                error: {
+                    code: "NOT_FOUND",
+                    message: "Room not found",
+                    statusCode: 404,
+                },
+            });
+            return;
+        }
+        if (room.creatorId !== userId) {
+            res.status(403).json({
+                success: false,
+                error: {
+                    code: "FORBIDDEN",
+                    message: "Only the creator can end the room",
+                    statusCode: 403,
+                },
+            });
+            return;
+        }
+        if (room.status !== "ACTIVE") {
+            res.status(400).json({
+                success: false,
+                error: {
+                    code: "ALREADY_ENDED",
+                    message: "Room already ended",
+                    statusCode: 400,
+                },
+            });
+            return;
+        }
+
+        await prisma.room.update({
+            where: { id: roomId },
+            data: { status: "ENDED", endedAt: new Date() },
+        });
+
+        // Save final snapshot for all languages
+        try {
+            const { roomYDocs, saveSnapshot } =
+                await import("../socket/yjsHandlers");
+            roomYDocs.forEach((state, key) => {
+                if (key.startsWith(roomId)) {
+                    const language = key.split(":")[1];
+                    saveSnapshot(roomId, state.doc, language);
+                }
+            });
+        } catch {}
+
+        // Notify all users
+        const { io } = await import("../server");
+        io.to(roomId).emit("room:terminated", {
+            reason: "Room ended by creator",
+        });
+
+        logger.info({ roomId, userId }, "Room ended by creator");
+        res.json({ success: true, data: { message: "Room ended" } });
+    } catch (err) {
+        logger.error(err, "POST /rooms/:id/end failed");
+        res.status(500).json({
+            success: false,
+            error: {
+                code: "SERVER_ERROR",
+                message: "Failed to end room",
+                statusCode: 500,
+            },
+        });
+    }
+});
+
 export default router;

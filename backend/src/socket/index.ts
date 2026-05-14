@@ -100,6 +100,7 @@ export function initSocket(server: Server) {
                             | "C",
                     },
                 });
+                socket.data.language = language;
                 const starterCode = STARTER_CODE[language] ?? "";
                 io.to(roomId).emit("language:changed", {
                     language,
