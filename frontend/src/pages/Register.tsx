@@ -6,7 +6,7 @@ import { useAuthStore } from "../store/authStore";
 function PasswordStrength({ password }: { password: string }) {
     const checks = [
         { label: "At least 8 characters", pass: password.length >= 8 },
-        { label: "Contains a number", pass: /d/.test(password) },
+        { label: "Contains a number", pass: /\d/.test(password) },
         { label: "Contains a letter", pass: /[a-zA-Z]/.test(password) },
     ];
     if (!password) return null;
