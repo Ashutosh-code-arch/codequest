@@ -2,11 +2,14 @@
     "name": "backend",
     "version": "1.0.0",
     "main": "index.js",
+    "engines": {
+        "node": "24.x"
+    },
     "scripts": {
         "dev": "ts-node-dev --respawn --transpile-only --exit-child src/server.ts",
         "build": "tsc",
         "start": "node dist/server.js",
-        "typecheck": "tsc --noEmit",
+        "typecheck": "tsc --noEmit --pretty false -p tsconfig.json",
         "test": "npm run build && node --test tests/*.test.js",
         "db:migrate": "prisma migrate dev",
         "db:generate": "prisma generate",
@@ -42,7 +45,7 @@
         "@types/cors": "^2.8.19",
         "@types/express": "^5.0.6",
         "@types/jsonwebtoken": "^9.0.10",
-        "@types/node": "^25.6.0",
+        "@types/node": "^24.12.2",
         "ts-node-dev": "^2.0.0",
         "typescript": "^6.0.3"
     }

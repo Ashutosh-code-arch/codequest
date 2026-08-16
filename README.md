@@ -26,7 +26,7 @@ video calls, code execution, and DSA problem solving.
 
 ### Prerequisites
 
-- Node.js 20+
+- Node.js 24 LTS
 - Docker (for local Postgres + Redis)
 
 ```bash

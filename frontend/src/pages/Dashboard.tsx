@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuthStore } from "../store/authStore";
 // import { getPublicQuestionsApi } from "../api/room";
@@ -295,15 +295,61 @@ export default function Dashboard() {
 
     const [rooms, setRooms] = useState<Room[]>([]);
     const [roomsLoading, setRoomsLoading] = useState(true);
+    const [roomsError, setRoomsError] = useState("");
+    const roomsRequestRef = useRef(0);
     const [joinId, setJoinId] = useState("");
     const [joining, setJoining] = useState(false);
     const [joinError, setJoinError] = useState("");
     const [showCreate, setShowCreate] = useState(false);
 
+    const loadRooms = useCallback(async () => {
+        const requestId = ++roomsRequestRef.current;
+        setRoomsLoading(true);
+        setRoomsError("");
+        try {
+            const nextRooms = await getUserRoomsApi();
+            if (requestId === roomsRequestRef.current) setRooms(nextRooms);
+        } catch (err: unknown) {
+            if (requestId !== roomsRequestRef.current) return;
+            const status = (err as { response?: { status?: number } }).response
+                ?.status;
+            if (status !== 401) {
+                setRoomsError("Could not load your rooms. Please try again.");
+            }
+        } finally {
+            if (requestId === roomsRequestRef.current) {
+                setRoomsLoading(false);
+            }
+        }
+    }, []);
+
     useEffect(() => {
-        getUserRoomsApi()
-            .then(setRooms)
-            .finally(() => setRoomsLoading(false));
+        const requestId = ++roomsRequestRef.current;
+        void getUserRoomsApi()
+            .then((nextRooms) => {
+                if (requestId === roomsRequestRef.current) {
+                    setRooms(nextRooms);
+                }
+            })
+            .catch((err: unknown) => {
+                if (requestId !== roomsRequestRef.current) return;
+                const status = (err as { response?: { status?: number } })
+                    .response?.status;
+                if (status !== 401) {
+                    setRoomsError(
+                        "Could not load your rooms. Please try again.",
+                    );
+                }
+            })
+            .finally(() => {
+                if (requestId === roomsRequestRef.current) {
+                    setRoomsLoading(false);
+                }
+            });
+
+        return () => {
+            roomsRequestRef.current += 1;
+        };
     }, []);
 
     async function handleJoin() {
@@ -546,7 +592,19 @@ export default function Dashboard() {
                                 {rooms.length}
                             </span>
                         </div>
-                        {roomsLoading ? (
+                        {roomsError ? (
+                            <div className="flex flex-col items-center justify-center gap-3 py-12 px-6 text-center">
+                                <p className="text-sm text-red-600">
+                                    {roomsError}
+                                </p>
+                                <button
+                                    onClick={() => void loadRooms()}
+                                    className="text-sm font-medium text-violet-600 hover:text-violet-800"
+                                >
+                                    Try again
+                                </button>
+                            </div>
+                        ) : roomsLoading ? (
                             <div className="divide-y divide-gray-50">
                                 {[1, 2, 3].map((i) => (
                                     <div
@@ -587,7 +645,8 @@ export default function Dashboard() {
                                 </p>
                             </div>
                         ) : (
-                            <table className="w-full text-sm">
+                            <div className="overflow-x-auto">
+                            <table className="w-full min-w-[720px] text-sm">
                                 <thead>
                                     <tr className="border-b border-gray-50 bg-gray-50">
                                         <th className="text-left px-5 py-3 text-xs font-medium text-gray-400 uppercase tracking-wide">
@@ -645,6 +704,7 @@ export default function Dashboard() {
                                     ))}
                                 </tbody>
                             </table>
+                            </div>
                         )}
                     </div>
                 </div>

@@ -3,9 +3,13 @@
   "private": true,
   "version": "0.0.0",
   "type": "module",
+  "engines": {
+    "node": "24.x"
+  },
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
+    "typecheck": "tsc -b --pretty false",
     "lint": "eslint .",
     "preview": "vite preview",
     "test:e2e:local": "node tests/e2e-local.mjs"

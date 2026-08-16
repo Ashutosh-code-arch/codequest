@@ -1,4 +1,5 @@
 import axios from "axios";
+import { useAuthStore } from "../store/authStore";
 
 export const api = axios.create({
     baseURL: import.meta.env.VITE_API_URL as string,
@@ -11,12 +12,20 @@ api.interceptors.request.use((config) => {
     return config;
 });
 
+let handlingUnauthorized = false;
+
 api.interceptors.response.use(
     (res) => res,
     (error) => {
-        if (error.response?.status === 401) {
-            localStorage.removeItem("accessToken");
-            window.location.href = "/login";
+        if (error.response?.status === 401 && !handlingUnauthorized) {
+            handlingUnauthorized = true;
+            useAuthStore.getState().logout();
+
+            if (window.location.pathname !== "/login") {
+                window.location.replace("/login");
+            } else {
+                handlingUnauthorized = false;
+            }
         }
         return Promise.reject(error);
     },
