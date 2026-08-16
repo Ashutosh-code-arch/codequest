@@ -7,8 +7,10 @@
     },
     "scripts": {
         "dev": "ts-node-dev --respawn --transpile-only --exit-child src/server.ts",
+        "prebuild": "npm run db:generate",
         "build": "tsc",
         "start": "node dist/server.js",
+        "pretypecheck": "npm run db:generate",
         "typecheck": "tsc --noEmit --pretty false -p tsconfig.json",
         "test": "npm run build && node --test tests/*.test.js",
         "db:migrate": "prisma migrate dev",
