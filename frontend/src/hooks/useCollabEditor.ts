@@ -32,6 +32,7 @@ export function useCollabEditor({
     const ydocRef = useRef<Y.Doc | null>(null);
     const awarenessRef = useRef<awarenessProtocol.Awareness | null>(null);
     const bindingRef = useRef<MonacoBinding | null>(null);
+    const editorRef = useRef<Monaco.editor.IStandaloneCodeEditor | null>(null);
     const colorRef = useRef<string>(CURSOR_COLORS[0]);
     const [synced, setSynced] = useState(false);
 
@@ -45,6 +46,15 @@ export function useCollabEditor({
 
         ydocRef.current = ydoc;
         awarenessRef.current = awareness;
+
+        if (editorRef.current) {
+            bindingRef.current = new MonacoBinding(
+                ydoc.getText("monaco"),
+                editorRef.current.getModel()!,
+                new Set([editorRef.current]),
+                awareness,
+            );
+        }
 
         // Pick a colour based on userId hash (stable per user)
         const hash = userId
@@ -157,6 +167,8 @@ export function useCollabEditor({
     function bindEditor(editor: Monaco.editor.IStandaloneCodeEditor) {
         if (!ydocRef.current || !awarenessRef.current) return;
 
+        editorRef.current = editor;
+        bindingRef.current?.destroy();
         const yText = ydocRef.current.getText("monaco");
 
         // MonacoBinding wires the Y.Text to the editor model

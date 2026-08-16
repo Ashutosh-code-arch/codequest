@@ -66,6 +66,14 @@ export function registerChatHandlers(io: TypedServer, socket: TypedSocket) {
         const userId = socket.data.userId;
         const username = socket.data.username;
 
+        if (socket.data.roomId !== roomId || !socket.rooms.has(roomId)) {
+            socket.emit("error", {
+                code: "FORBIDDEN",
+                message: "Join the room before sending messages",
+            });
+            return;
+        }
+
         // ── Validation ──────────────────────────────────────────────────────
         const trimmed = content?.trim();
 
@@ -92,6 +100,17 @@ export function registerChatHandlers(io: TypedServer, socket: TypedSocket) {
         }
 
         try {
+            const room = await prisma.room.findUnique({
+                where: { id: roomId },
+                select: { status: true },
+            });
+            if (room?.status !== "ACTIVE") {
+                socket.emit("error", {
+                    code: "ROOM_NOT_ACTIVE",
+                    message: "Room is not active",
+                });
+                return;
+            }
             // ── Persist ────────────────────────────────────────────────────────
             const message = await prisma.chatMessage.create({
                 data: { roomId, userId, content: trimmed },

@@ -144,7 +144,12 @@ export default function ExecutionPanel({
         setRunResult(null);
         setRunError("");
         try {
-            const result = await runCodeApi({ code, language, stdin });
+            const result = await runCodeApi({
+                code,
+                language,
+                stdin,
+                questionId: questionId ?? undefined,
+            });
             setRunResult(result);
         } catch (err: unknown) {
             setRunError(
@@ -161,18 +166,6 @@ export default function ExecutionPanel({
 
     async function handleSubmit() {
         const code = codeRef.current;
-        // console.log(
-        //     "Submit fired — code length:",
-        //     code.length,
-        //     "peek:",
-        //     code.slice(0, 80),
-        // );
-        console.log("=== SUBMIT ===");
-        console.log("language:", language);
-        console.log("questionId:", questionId);
-        console.log("code:", code);
-        console.error("SUBMIT CODE:", JSON.stringify(code.slice(0, 500)));
-        console.error("SUBMIT CODE LENGTH:", code.length);
         if (!code.trim()) {
             setSubmitError("Editor is empty");
             return;

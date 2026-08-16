@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useAuthStore } from "../store/authStore";
 import type { Room, SupportedLanguage } from "../types";
@@ -74,6 +74,7 @@ export default function Room() {
     const [selectedQuestionId, setSelectedQuestionId] = useState<string | null>(
         null,
     );
+    const selectedQuestionIdRef = useRef<string | null>(null);
     const [ending, setEnding] = useState(false);
     const [isVideoOpen, setIsVideoOpen] = useState(false);
     const [socketDisconnected, setSocketDisconnected] = useState(false);
@@ -100,8 +101,6 @@ export default function Room() {
     });
 
     // ── Step 1: Load room ─────────────────────────────────────────────────
-    const hasInvalidRoom = !roomId;
-
     useEffect(() => {
         if (currentRoomIdRef.current !== roomId) {
             leftRef.current = false;
@@ -109,14 +108,15 @@ export default function Room() {
         }
     }, [roomId]);
 
-    function leaveRoom() {
+    const leaveRoom = useCallback(() => {
+        if (!roomId) return;
         if (leftRef.current) return; // already left — don't send twice
         leftRef.current = true;
-        socket.emit("room:leave", { roomId: roomId! });
-    }
+        socket.emit("room:leave", { roomId });
+    }, [roomId]);
 
     useEffect(() => {
-        if (hasInvalidRoom) return;
+        if (!roomId) return;
 
         leftRef.current = false;
         let cancelled = false;
@@ -161,6 +161,10 @@ export default function Room() {
     }, [roomId]);
 
     useEffect(() => {
+        selectedQuestionIdRef.current = selectedQuestionId;
+    }, [selectedQuestionId]);
+
+    useEffect(() => {
         if (!selectedQuestionId || !room) return;
         const rq = room.questions.find(
             (q) => q.questionId === selectedQuestionId,
@@ -175,14 +179,13 @@ export default function Room() {
         if (starter && collabEditorRef.current) {
             collabEditorRef.current.insertStarterCode(starter);
         }
-    }, [selectedQuestionId, language]);
+    }, [selectedQuestionId, language, room]);
 
     // ── Step 2: Socket — only runs after room is loaded ───────────────────
     useEffect(() => {
         // roomLoaded is false on first render, true after fetchRoom succeeds
         if (!roomLoaded || !roomId) return;
 
-        socket.emit("room:join", { roomId });
         // Server sends current participant list to this joiner
         function onExistingParticipants(data: {
             participants: Array<{
@@ -194,6 +197,9 @@ export default function Room() {
             // Merge server list with what REST already gave us
             // Server list is authoritative — use it to replace
             setUsers(data.participants);
+            socket.emit("yjs:sync-request", {
+                questionId: selectedQuestionIdRef.current ?? undefined,
+            });
         }
         // Server sends current participant list to this joiner
 
@@ -269,8 +275,18 @@ export default function Room() {
         socket.on("room:terminated", onTerminated);
         socket.on("language:changed", onLanguageChanged);
         socket.on("error", onSocketError);
-        socket.on("connect", () => setSocketDisconnected(false));
-        socket.on("disconnect", () => setSocketDisconnected(true));
+        function onConnect() {
+            setSocketDisconnected(false);
+            socket.emit("room:join", { roomId: roomId! });
+        }
+
+        function onDisconnect() {
+            setSocketDisconnected(true);
+        }
+
+        socket.on("connect", onConnect);
+        socket.on("disconnect", onDisconnect);
+        socket.emit("room:join", { roomId });
 
         return () => {
             leaveRoom();
@@ -284,10 +300,10 @@ export default function Room() {
             socket.off("room:terminated", onTerminated);
             socket.off("language:changed", onLanguageChanged);
             socket.off("error", onSocketError);
-            socket.off("connect");
-            socket.off("disconnect");
+            socket.off("connect", onConnect);
+            socket.off("disconnect", onDisconnect);
         };
-    }, [roomId, roomLoaded, navigate]);
+    }, [roomId, roomLoaded, navigate, leaveRoom]);
 
     async function handleEndRoom() {
         if (!window.confirm("End this session for everyone?")) return;
@@ -522,6 +538,7 @@ export default function Room() {
                             // onCodeChange={setCurrentCode}
                             codeRef={codeRef}
                             ref={collabEditorRef}
+                            questionId={selectedQuestionId}
                         />
                     </div>
 
@@ -530,10 +547,7 @@ export default function Room() {
                         <ExecutionPanel
                             // code={currentCode}
                             codeRef={codeRef}
-                            language={
-                                (room?.language as SupportedLanguage) ??
-                                "JAVASCRIPT"
-                            }
+                            language={language as SupportedLanguage}
                             questionId={selectedQuestionId}
                             roomId={roomId}
                         />

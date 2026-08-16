@@ -3,6 +3,7 @@ import { authenticate } from "../middleware/auth";
 import { createRoomSchema } from "../validators/room";
 import { prisma } from "../lib/prisma";
 import { logger } from "../lib/logger";
+import { stopRoomTimer } from "../socket/timerHandlers";
 
 const router = Router();
 router.use(authenticate);
@@ -124,6 +125,7 @@ router.post("/:id/join", async (req, res) => {
 
     try {
         const result = await prisma.$transaction(async (tx: any) => {
+            await tx.$queryRaw`SELECT "id" FROM "Room" WHERE "id" = ${roomId} FOR UPDATE`;
             const room = await tx.room.findUnique({
                 where: { id: roomId },
                 include: { participants: { where: { isActive: true } } },
@@ -212,6 +214,27 @@ router.post("/:id/join", async (req, res) => {
 // GET /api/v1/rooms/:id - room details
 router.get("/:id", async (req, res) => {
     try {
+        const participation = await prisma.roomParticipant.findUnique({
+            where: {
+                roomId_userId: {
+                    roomId: req.params.id,
+                    userId: req.user!.id,
+                },
+            },
+            select: { id: true },
+        });
+        if (!participation) {
+            res.status(403).json({
+                success: false,
+                error: {
+                    code: "FORBIDDEN",
+                    message: "Join the room before viewing it",
+                    statusCode: 403,
+                },
+            });
+            return;
+        }
+
         const room = await prisma.room.findUnique({
             where: { id: req.params.id },
             include: {
@@ -240,7 +263,7 @@ router.get("/:id", async (req, res) => {
     } catch (err) {
         logger.error(err, "GET /rooms/:id failed");
         res.status(500).json({
-            success: true,
+            success: false,
             error: {
                 code: "SERVER_ERROR",
                 message: "Failed to fetch room",
@@ -286,6 +309,25 @@ router.get("/", async (req, res) => {
 // GET /api/v1/rooms/:id/snapshots
 router.get("/:id/snapshots", async (req, res) => {
     try {
+        const participation = await prisma.roomParticipant.findUnique({
+            where: {
+                roomId_userId: {
+                    roomId: req.params.id,
+                    userId: req.user!.id,
+                },
+            },
+        });
+        if (!participation) {
+            res.status(403).json({
+                success: false,
+                error: {
+                    code: "FORBIDDEN",
+                    message: "You are not a participant in this room",
+                    statusCode: 403,
+                },
+            });
+            return;
+        }
         const snapshots = await prisma.codeSnapshot.findMany({
             where: { roomId: req.params.id },
             orderBy: { savedAt: "desc" },
@@ -321,8 +363,27 @@ router.patch("/:id/language", async (req, res) => {
         return;
     }
     try {
-        const room = await prisma.room.update({
-            where: { id: req.params.id },
+        const participation = await prisma.roomParticipant.findUnique({
+            where: {
+                roomId_userId: {
+                    roomId: req.params.id,
+                    userId: req.user!.id,
+                },
+            },
+        });
+        if (!participation || !participation.isActive) {
+            res.status(403).json({
+                success: false,
+                error: {
+                    code: "FORBIDDEN",
+                    message: "Join the room before changing its language",
+                    statusCode: 403,
+                },
+            });
+            return;
+        }
+        const result = await prisma.room.updateMany({
+            where: { id: req.params.id, status: "ACTIVE" },
             data: {
                 language: language as
                     | "JAVASCRIPT"
@@ -332,7 +393,18 @@ router.patch("/:id/language", async (req, res) => {
                     | "C",
             },
         });
-        res.json({ success: true, data: { language: room.language } });
+        if (result.count === 0) {
+            res.status(409).json({
+                success: false,
+                error: {
+                    code: "ROOM_NOT_ACTIVE",
+                    message: "Room is not active",
+                    statusCode: 409,
+                },
+            });
+            return;
+        }
+        res.json({ success: true, data: { language } });
     } catch {
         res.status(500).json({
             success: false,
@@ -389,28 +461,35 @@ router.post("/:id/end", async (req, res) => {
             return;
         }
 
-        await prisma.room.update({
-            where: { id: roomId },
+        const { saveAllRoomSnapshots, destroyRoomDoc } =
+            await import("../socket/yjsHandlers");
+        await saveAllRoomSnapshots(roomId);
+
+        const updateResult = await prisma.room.updateMany({
+            where: { id: roomId, status: "ACTIVE" },
             data: { status: "ENDED", endedAt: new Date() },
         });
-
-        // Save final snapshot for all languages
-        try {
-            const { roomYDocs, saveSnapshot } =
-                await import("../socket/yjsHandlers");
-            roomYDocs.forEach((state, key) => {
-                if (key.startsWith(roomId)) {
-                    const language = key.split(":")[1];
-                    saveSnapshot(roomId, state.doc, language);
-                }
+        if (updateResult.count === 0) {
+            res.status(409).json({
+                success: false,
+                error: {
+                    code: "ALREADY_ENDED",
+                    message: "Room already ended",
+                    statusCode: 409,
+                },
             });
-        } catch {}
+            return;
+        }
+        stopRoomTimer(roomId);
+        destroyRoomDoc(roomId);
 
         // Notify all users
         const { io } = await import("../server");
         io.to(roomId).emit("room:terminated", {
             reason: "Room ended by creator",
         });
+        const { evictRoomSockets } = await import("../socket/roomHandlers");
+        await evictRoomSockets(io, roomId);
 
         logger.info({ roomId, userId }, "Room ended by creator");
         res.json({ success: true, data: { message: "Room ended" } });

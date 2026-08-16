@@ -88,9 +88,19 @@ export function initSocket(server: Server) {
         socket.on("language:change", async ({ roomId, language }) => {
             const allowed = ["JAVASCRIPT", "PYTHON", "JAVA", "CPP", "C"];
             if (!allowed.includes(language)) return;
+            if (
+                socket.data.roomId !== roomId ||
+                !socket.rooms.has(roomId)
+            ) {
+                socket.emit("error", {
+                    code: "FORBIDDEN",
+                    message: "Join the room before changing its language",
+                });
+                return;
+            }
             try {
-                await prisma.room.update({
-                    where: { id: roomId },
+                const result = await prisma.room.updateMany({
+                    where: { id: roomId, status: "ACTIVE" },
                     data: {
                         language: language as
                             | "JAVASCRIPT"
@@ -100,7 +110,18 @@ export function initSocket(server: Server) {
                             | "C",
                     },
                 });
-                socket.data.language = language;
+                if (result.count === 0) {
+                    socket.emit("error", {
+                        code: "ROOM_NOT_ACTIVE",
+                        message: "Room is not active",
+                    });
+                    return;
+                }
+                for (const client of io.sockets.sockets.values()) {
+                    if (client.rooms.has(roomId)) {
+                        client.data.language = language;
+                    }
+                }
                 const starterCode = STARTER_CODE[language] ?? "";
                 io.to(roomId).emit("language:changed", {
                     language,

@@ -20,6 +20,7 @@ interface RoomYState {
 }
 
 const roomYDocs = new Map<string, RoomYState>();
+const pendingRoomYDocs = new Map<string, Promise<RoomYState>>();
 
 export function getRoomDocKey(
     roomId: string,
@@ -38,6 +39,27 @@ async function getOrCreateRoomDoc(
 ): Promise<RoomYState> {
     const key = getRoomDocKey(roomId, language, questionId);
     if (roomYDocs.has(key)) return roomYDocs.get(key)!;
+
+    const pending = pendingRoomYDocs.get(key);
+    if (pending) return pending;
+
+    const creation = createRoomDoc(roomId, language, questionId, key);
+    pendingRoomYDocs.set(key, creation);
+    try {
+        return await creation;
+    } finally {
+        if (pendingRoomYDocs.get(key) === creation) {
+            pendingRoomYDocs.delete(key);
+        }
+    }
+}
+
+async function createRoomDoc(
+    roomId: string,
+    language: string,
+    questionId: string | undefined,
+    key: string,
+): Promise<RoomYState> {
 
     const doc = new Y.Doc();
     const awareness = new awarenessProtocol.Awareness(doc);
@@ -66,7 +88,7 @@ async function getOrCreateRoomDoc(
 
     // Auto-save snapshot every 60 seconds
     const saveTimer = setInterval(
-        () => saveSnapshot(roomId, doc, language),
+        () => saveSnapshot(roomId, doc, language, questionId),
         60_000,
     );
 
@@ -78,12 +100,23 @@ async function getOrCreateRoomDoc(
 }
 
 function destroyRoomDoc(roomId: string) {
-    const state = roomYDocs.get(roomId);
-    if (!state) return;
-    if (state.saveTimer) clearInterval(state.saveTimer);
-    state.doc.destroy();
-    roomYDocs.delete(roomId);
+    for (const [key, state] of roomYDocs.entries()) {
+        if (!key.startsWith(`${roomId}:`)) continue;
+        if (state.saveTimer) clearInterval(state.saveTimer);
+        state.doc.destroy();
+        roomYDocs.delete(key);
+    }
     logger.debug({ roomId }, "Y.js doc destroyed");
+}
+
+async function saveAllRoomSnapshots(roomId: string) {
+    const saves: Promise<void>[] = [];
+    for (const [key, state] of roomYDocs.entries()) {
+        if (!key.startsWith(`${roomId}:`)) continue;
+        const [, language, questionId] = key.split(":");
+        saves.push(saveSnapshot(roomId, state.doc, language, questionId));
+    }
+    await Promise.all(saves);
 }
 
 async function saveSnapshot(
@@ -128,8 +161,12 @@ export function registerYjsHandlers(_io: TypedServer, socket: TypedSocket) {
 
         // Get current room language from DB (or cache it in socket.data)
         const language = socket.data.language ?? "JAVASCRIPT";
+        const questionId = socket.data.questionId;
+        const key = getRoomDocKey(roomId, language, questionId);
+        const channel = `yjs:${key}`;
+        if (!socket.rooms.has(channel)) return;
 
-        const state = await getOrCreateRoomDoc(roomId, language);
+        const state = await getOrCreateRoomDoc(roomId, language, questionId);
         const arr = new Uint8Array(data);
         const decoder = decoding.createDecoder(arr);
         const msgType = decoding.readVarInt(decoder);
@@ -152,7 +189,7 @@ export function registerYjsHandlers(_io: TypedServer, socket: TypedSocket) {
             encoding.writeVarInt(broadcastEncoder, MSG_SYNC);
             syncProtocol.writeUpdate(broadcastEncoder, update);
             socket
-                .to(roomId)
+                .to(channel)
                 .emit(
                     "yjs:message",
                     encoding.toUint8Array(broadcastEncoder)
@@ -166,7 +203,7 @@ export function registerYjsHandlers(_io: TypedServer, socket: TypedSocket) {
                 awarenessUpdate,
                 socket,
             );
-            socket.to(roomId).emit("yjs:message", arr.buffer as ArrayBuffer);
+            socket.to(channel).emit("yjs:message", arr.buffer as ArrayBuffer);
         }
     });
 
@@ -177,8 +214,18 @@ export function registerYjsHandlers(_io: TypedServer, socket: TypedSocket) {
 
         const language = socket.data.language ?? "JAVASCRIPT";
         const questionId = data?.questionId;
+        const key = getRoomDocKey(roomId, language, questionId);
+        const channel = `yjs:${key}`;
 
-        const state = await getOrCreateRoomDoc(roomId, language);
+        for (const joinedRoom of socket.rooms) {
+            if (joinedRoom.startsWith("yjs:") && joinedRoom !== channel) {
+                await socket.leave(joinedRoom);
+            }
+        }
+        await socket.join(channel);
+        socket.data.questionId = questionId;
+
+        const state = await getOrCreateRoomDoc(roomId, language, questionId);
         const encoder = encoding.createEncoder();
         encoding.writeVarInt(encoder, MSG_SYNC);
         syncProtocol.writeSyncStep1(encoder, state.doc);
@@ -189,4 +236,10 @@ export function registerYjsHandlers(_io: TypedServer, socket: TypedSocket) {
     });
 }
 
-export { getOrCreateRoomDoc, destroyRoomDoc, saveSnapshot, roomYDocs };
+export {
+    getOrCreateRoomDoc,
+    destroyRoomDoc,
+    saveSnapshot,
+    saveAllRoomSnapshots,
+    roomYDocs,
+};

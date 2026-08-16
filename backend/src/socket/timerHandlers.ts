@@ -14,7 +14,6 @@ export function startRoomTimer(
     io: TypedServer,
     roomId: string,
     durationSeconds: number,
-    language: string,
 ) {
     // Don't start if already running
     if (roomIntervals.has(roomId)) {
@@ -26,15 +25,11 @@ export function startRoomTimer(
     }
 
     if (durationSeconds <= 0) {
-        logger.warn(
-            { roomId, durationSeconds },
-            "Invalid timer duration — not starting",
-        );
+        void expireRoom(io, roomId);
         return;
     }
 
     roomTimers.set(roomId, durationSeconds);
-    logger.info({ roomId, durationSeconds }, "Room timer started");
 
     const interval = setInterval(async () => {
         const current = roomTimers.get(roomId);
@@ -53,39 +48,38 @@ export function startRoomTimer(
             roomIntervals.delete(roomId);
             roomTimers.delete(roomId);
 
-            io.to(roomId).emit("room:time-up");
-
-            try {
-                await prisma.room.update({
-                    where: { id: roomId },
-                    data: { status: "ENDED", endedAt: new Date() },
-                });
-                logger.info(
-                    { roomId },
-                    "Room ended: timer expired, snapshot saved",
-                );
-            } catch (err) {
-                logger.error(err, "Failed to end room cleanly");
-            }
-
-            try {
-                const { getOrCreateRoomDoc, saveSnapshot } =
-                    await import("./yjsHandlers");
-                const state = await getOrCreateRoomDoc(roomId, language);
-                await saveSnapshot(roomId, state.doc);
-                logger.info({ roomId }, "Final snapshot saved");
-            } catch (err) {
-                // yjsHandlers may not exist yet (pre-F4) — safe to ignore
-                logger.debug(
-                    { roomId, err },
-                    "Snapshot skipped — yjsHandlers not available",
-                );
-            }
+            await expireRoom(io, roomId);
         }
     }, 1000);
 
     roomIntervals.set(roomId, interval);
     logger.info({ roomId, durationSeconds }, "Room timer started");
+}
+
+async function expireRoom(io: TypedServer, roomId: string) {
+    try {
+        const { saveAllRoomSnapshots, destroyRoomDoc } =
+            await import("./yjsHandlers");
+        await saveAllRoomSnapshots(roomId);
+
+        const result = await prisma.room.updateMany({
+            where: { id: roomId, status: "ACTIVE" },
+            data: { status: "ENDED", endedAt: new Date() },
+        });
+
+        if (result.count === 0) {
+            destroyRoomDoc(roomId);
+            return;
+        }
+
+        io.to(roomId).emit("room:time-up");
+        const { evictRoomSockets } = await import("./roomHandlers");
+        await evictRoomSockets(io, roomId);
+        destroyRoomDoc(roomId);
+        logger.info({ roomId }, "Room ended: timer expired");
+    } catch (err) {
+        logger.error(err, "Failed to end room cleanly");
+    }
 }
 
 export function stopRoomTimer(roomId: string) {

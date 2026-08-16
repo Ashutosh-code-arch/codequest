@@ -1,5 +1,5 @@
 import { Router } from "express";
-import rateLimit from "express-rate-limit";
+import rateLimit, { ipKeyGenerator } from "express-rate-limit";
 import { authenticate } from "../middleware/auth";
 import { prisma } from "../lib/prisma";
 import { logger } from "../lib/logger";
@@ -23,7 +23,8 @@ const SUPPORTED_LANGUAGES = [
 const executionLimiter = rateLimit({
     windowMs: 60 * 1000,
     max: 10,
-    keyGenerator: (req) => req.user?.id ?? req.ip ?? "unknown",
+    keyGenerator: (req) =>
+        req.user?.id ?? (req.ip ? ipKeyGenerator(req.ip) : "unknown"),
     standardHeaders: true,
     legacyHeaders: false,
     message: {
@@ -48,7 +49,7 @@ const submitSchema = z.object({
     code: z.string().min(1).max(65536),
     language: z.enum(SUPPORTED_LANGUAGES),
     questionId: z.string().uuid(),
-    roomId: z.string().optional(),
+    roomId: z.string().uuid().optional(),
 });
 
 function normalizeOutput(s: string): string {
@@ -137,6 +138,45 @@ router.post("/submit", executionLimiter, async (req, res) => {
     const { code, language, questionId, roomId } = result.data;
 
     try {
+        if (roomId) {
+            const participation = await prisma.roomParticipant.findUnique({
+                where: {
+                    roomId_userId: {
+                        roomId,
+                        userId: req.user!.id,
+                    },
+                },
+                include: {
+                    room: {
+                        select: {
+                            status: true,
+                            questions: {
+                                where: { questionId },
+                                select: { questionId: true },
+                            },
+                        },
+                    },
+                },
+            });
+            if (
+                !participation ||
+                !participation.isActive ||
+                participation.room.status !== "ACTIVE" ||
+                participation.room.questions.length === 0
+            ) {
+                res.status(403).json({
+                    success: false,
+                    error: {
+                        code: "INVALID_ROOM_SUBMISSION",
+                        message:
+                            "Join an active room containing this question before submitting",
+                        statusCode: 403,
+                    },
+                });
+                return;
+            }
+        }
+
         // Fetch all test cases for this question
         const [testCases, question] = await Promise.all([
             prisma.testCase.findMany({

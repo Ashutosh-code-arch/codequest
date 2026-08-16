@@ -4,8 +4,12 @@ import { prisma } from "../lib/prisma";
 import { logger } from "../lib/logger";
 import {
     createQuestionSchema,
+    createTestCaseSchema,
     updateQuestionSchema,
+    updateTestCaseSchema,
 } from "../validators/question";
+import { io } from "../server";
+import { stopRoomTimer } from "../socket/timerHandlers";
 
 const router = Router();
 
@@ -262,11 +266,6 @@ router.delete("/questions/:id", async (req, res) => {
 });
 
 // -------------------- Test Cases -------------------------------
-import {
-    createTestCaseSchema,
-    updateTestCaseSchema,
-} from "../validators/question";
-import { io } from "../server";
 
 // POST /api/v1/admin/questions/:id/testCases
 router.post("/questions/:id/testcases", async (req, res) => {
@@ -473,14 +472,33 @@ router.post("/rooms/:id/terminate", async (req, res) => {
             return;
         }
 
-        await prisma.room.update({
-            where: { id: req.params.id },
+        const { saveAllRoomSnapshots, destroyRoomDoc } =
+            await import("../socket/yjsHandlers");
+        await saveAllRoomSnapshots(req.params.id);
+
+        const updateResult = await prisma.room.updateMany({
+            where: { id: req.params.id, status: "ACTIVE" },
             data: { status: "TERMINATED", endedAt: new Date() },
         });
+        if (updateResult.count === 0) {
+            res.status(409).json({
+                success: false,
+                error: {
+                    code: "ROOM_NOT_ACTIVE",
+                    message: "Room is not active",
+                    statusCode: 409,
+                },
+            });
+            return;
+        }
+        stopRoomTimer(req.params.id);
+        destroyRoomDoc(req.params.id);
 
         io.to(req.params.id).emit("room:terminated", {
             reason: "Terminated by admin",
         });
+        const { evictRoomSockets } = await import("../socket/roomHandlers");
+        await evictRoomSockets(io, req.params.id);
 
         logger.info(
             { roomId: req.params.id, adminId: req.user!.id },

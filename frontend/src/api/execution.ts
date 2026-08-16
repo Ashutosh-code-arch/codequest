@@ -30,6 +30,7 @@ export async function runCodeApi(payload: {
     code: string;
     language: SupportedLanguage;
     stdin?: string;
+    questionId?: string;
 }): Promise<ExecuteResult> {
     const res = await api.post("/api/v1/execute", payload);
     return res.data.data;

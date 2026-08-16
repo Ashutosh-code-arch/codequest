@@ -3,6 +3,8 @@ import { prisma } from "../lib/prisma";
 import { broadcastSystemMessage, sendChatHistory } from "./chatHandlers";
 import { getRoomTimer, startRoomTimer } from "./timerHandlers";
 import { TypedServer, TypedSocket } from "./types";
+import { getRemainingRoomSeconds } from "../services/rooms/timing";
+import type { Server } from "socket.io";
 
 export function registerRoomHandlers(io: TypedServer, socket: TypedSocket) {
     socket.on("room:join", async ({ roomId }) => {
@@ -10,9 +12,37 @@ export function registerRoomHandlers(io: TypedServer, socket: TypedSocket) {
         const username = socket.data.username;
 
         try {
-            const room = await prisma.room.findUnique({
-                where: { id: roomId },
-                include: { participants: { where: { isActive: true } } },
+            const room = await prisma.$transaction(async (tx) => {
+                await tx.$queryRaw`SELECT "id" FROM "Room" WHERE "id" = ${roomId} FOR UPDATE`;
+                const lockedRoom = await tx.room.findUnique({
+                    where: { id: roomId },
+                    include: { participants: true },
+                });
+
+                if (!lockedRoom || lockedRoom.status !== "ACTIVE") {
+                    return lockedRoom;
+                }
+
+                const participation = lockedRoom.participants.find(
+                    (p) => p.userId === userId,
+                );
+                if (!participation) {
+                    return { ...lockedRoom, joinRequired: true };
+                }
+
+                const activeCount = lockedRoom.participants.filter(
+                    (p) => p.isActive,
+                ).length;
+                if (!participation.isActive && activeCount >= lockedRoom.maxUsers) {
+                    return { ...lockedRoom, isFull: true };
+                }
+
+                await tx.roomParticipant.upsert({
+                    where: { roomId_userId: { roomId, userId } },
+                    create: { roomId, userId, isActive: true },
+                    update: { isActive: true, leftAT: null },
+                });
+                return lockedRoom;
             });
 
             if (!room) {
@@ -30,23 +60,20 @@ export function registerRoomHandlers(io: TypedServer, socket: TypedSocket) {
                 return;
             }
 
-            const alreadyIn = room.participants.some(
-                (p: any) => p.userId === userId,
-            );
-
-            if (!alreadyIn && room.participants.length >= room.maxUsers) {
-                socket.emit("room:full", {
-                    message: "Room is full (max 4 users",
+            if ("joinRequired" in room && room.joinRequired) {
+                socket.emit("error", {
+                    code: "JOIN_REQUIRED",
+                    message: "Join the room before opening a live connection",
                 });
                 return;
             }
 
-            // update DB
-            await prisma.roomParticipant.upsert({
-                where: { roomId_userId: { roomId, userId } },
-                create: { roomId, userId, isActive: true },
-                update: { isActive: true, leftAT: null },
-            });
+            if ("isFull" in room && room.isFull) {
+                socket.emit("room:full", {
+                    message: "Room is full (max 4 users)",
+                });
+                return;
+            }
 
             // Join socket room
             await socket.join(roomId);
@@ -86,7 +113,11 @@ export function registerRoomHandlers(io: TypedServer, socket: TypedSocket) {
             } else {
                 // No timer running — this is the first join ever for this room
                 // Use timerSeconds from DB (the original duration)
-                startRoomTimer(io, roomId, room.timerSeconds, room.language);
+                const remainingSeconds = getRemainingRoomSeconds(
+                    room.startedAt,
+                    room.timerSeconds,
+                );
+                startRoomTimer(io, roomId, remainingSeconds);
             }
 
             logger.info(
@@ -103,10 +134,12 @@ export function registerRoomHandlers(io: TypedServer, socket: TypedSocket) {
     });
 
     socket.on("room:leave", async ({ roomId }) => {
+        if (socket.data.roomId !== roomId) return;
         await handleLeave(io, socket, roomId);
     });
 
     socket.on("timer:sync-request", async ({ roomId }) => {
+        if (socket.data.roomId !== roomId || !socket.rooms.has(roomId)) return;
         const remaining = getRoomTimer(roomId);
         if (remaining !== null) {
             socket.emit("timer:sync", { secondsRemaining: remaining });
@@ -119,6 +152,28 @@ export function registerRoomHandlers(io: TypedServer, socket: TypedSocket) {
     });
 }
 
+export async function evictRoomSockets(
+    server: Server | TypedServer,
+    roomId: string,
+) {
+    const io = server as TypedServer;
+    await prisma.roomParticipant.updateMany({
+        where: { roomId, isActive: true },
+        data: { isActive: false, leftAT: new Date() },
+    });
+
+    for (const client of io.sockets.sockets.values()) {
+        if (!client.rooms.has(roomId)) continue;
+        client.data.roomId = "";
+        client.data.questionId = undefined;
+        for (const joinedRoom of client.rooms) {
+            if (joinedRoom === roomId || joinedRoom.startsWith("yjs:")) {
+                await client.leave(joinedRoom);
+            }
+        }
+    }
+}
+
 async function handleLeave(
     io: TypedServer,
     socket: TypedSocket,
@@ -128,13 +183,25 @@ async function handleLeave(
     const userName = socket.data.username;
 
     try {
+        await socket.leave(roomId);
+        socket.data.roomId = "";
+
+        const hasAnotherConnection = Array.from(
+            io.sockets.sockets.values(),
+        ).some(
+            (candidate) =>
+                candidate.id !== socket.id &&
+                candidate.connected &&
+                candidate.data.userId === userId &&
+                candidate.data.roomId === roomId,
+        );
+
+        if (hasAnotherConnection) return;
+
         await prisma.roomParticipant.updateMany({
             where: { roomId, userId },
             data: { isActive: false, leftAT: new Date() },
         });
-
-        await socket.leave(roomId);
-        socket.data.roomId = "";
 
         // Broadcast leave system message
         broadcastSystemMessage(io, roomId, `${userName} left the room`);
@@ -145,7 +212,7 @@ async function handleLeave(
 
         io.to(roomId).emit("room:user-left", {
             userId,
-            userName,
+            username: userName,
             participantCount: remaining,
         });
         logger.info({ roomId, userId }, "Socket: user left room");

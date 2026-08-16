@@ -411,7 +411,16 @@ function TestCaseManager({
         if (!window.confirm("Delete this test case?")) return;
         try {
             await deleteTestCaseApi(id);
-            // await load();
+            setQuestion((current) =>
+                current
+                    ? {
+                          ...current,
+                          testCases: current.testCases.filter(
+                              (testCase) => testCase.id !== id,
+                          ),
+                      }
+                    : current,
+            );
         } catch {
             alert("Failed to delete test case");
         }
@@ -692,7 +701,9 @@ export default function AdminPanel() {
         try {
             await deleteQuestionApi(id);
             setConfirmDelete(null);
-            // await loadQuestions();
+            setQuestions((current) =>
+                current.filter((question) => question.id !== id),
+            );
         } catch {
             alert("Failed to delete question");
         }
@@ -701,8 +712,15 @@ export default function AdminPanel() {
     function handleSaved(q: Question) {
         setShowCreate(false);
         setEditQuestion(null);
-        // loadQuestions();
-        void q; // suppress unused warning
+        setQuestions((current) => {
+            const existing = current.find((question) => question.id === q.id);
+            if (existing) {
+                return current.map((question) =>
+                    question.id === q.id ? { ...question, ...q } : question,
+                );
+            }
+            return [{ ...q, _count: { testCases: 0 } }, ...current];
+        });
     }
 
     async function handleTerminate(id: string) {
@@ -714,7 +732,11 @@ export default function AdminPanel() {
             return;
         try {
             await terminateRoomApi(id);
-            // await loadRooms();
+            setRooms((current) =>
+                current.map((room) =>
+                    room.id === id ? { ...room, status: "TERMINATED" } : room,
+                ),
+            );
         } catch {
             alert("Failed to terminate room");
         }

@@ -17,7 +17,7 @@ export interface ServerToClientEvents {
     }) => void;
     "room:user-left": (data: {
         userId: string;
-        userName: string;
+        username: string;
         participantCount: number;
     }) => void;
     "room:full": (data: { message: string }) => void;
@@ -64,6 +64,7 @@ export interface SocketData {
     username: string;
     role: string;
     language: string;
+    questionId?: string;
 }
 
 export type TypedServer = Server<

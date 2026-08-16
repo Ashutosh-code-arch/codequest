@@ -59,7 +59,7 @@ export async function updateQuestionApi(
     id: string,
     payload: Partial<CreateQuestionPayload>,
 ): Promise<Question> {
-    const res = await api.post(`/api/v1/admin/questions/${id}`, payload);
+    const res = await api.put(`/api/v1/admin/questions/${id}`, payload);
     return res.data.data.question;
 }
 

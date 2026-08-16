@@ -1,17 +1,28 @@
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { lazy, Suspense } from "react";
 import { ProtectedRoute, AdminRoute } from "./components/ProtectedRoute";
-import Login from "./pages/Login";
-import Register from "./pages/Register";
-import Dashboard from "./pages/Dashboard";
-import AdminPanel from "./pages/AdminPanel";
-import Room from "./pages/Room";
-import History from "./pages/History";
-import NotFound from "./pages/NotFound";
+
+const Login = lazy(() => import("./pages/Login"));
+const Register = lazy(() => import("./pages/Register"));
+const Dashboard = lazy(() => import("./pages/Dashboard"));
+const AdminPanel = lazy(() => import("./pages/AdminPanel"));
+const Room = lazy(() => import("./pages/Room"));
+const History = lazy(() => import("./pages/History"));
+const NotFound = lazy(() => import("./pages/NotFound"));
+
+function PageFallback() {
+    return (
+        <div className="min-h-screen bg-gray-950 flex items-center justify-center">
+            <div className="w-6 h-6 border-2 border-violet-500 border-t-transparent rounded-full animate-spin" />
+        </div>
+    );
+}
 
 export default function App() {
     return (
         <BrowserRouter>
-            <Routes>
+            <Suspense fallback={<PageFallback />}>
+                <Routes>
                 {/* Public */}
                 <Route path="/login" element={<Login />} />
                 <Route path="/register" element={<Register />} />
@@ -30,7 +41,8 @@ export default function App() {
 
                 <Route path="/" element={<Navigate to="/login" replace />} />
                 <Route path="*" element={<NotFound />} />
-            </Routes>
+                </Routes>
+            </Suspense>
         </BrowserRouter>
     );
 }

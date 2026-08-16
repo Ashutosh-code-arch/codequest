@@ -111,6 +111,8 @@ export function useWebRTC({
     useEffect(() => {
         if (!enabled || !roomId) return;
         let active = true;
+        const connections = peerConns.current;
+        const candidateQueue = pendingCandidates.current;
 
         async function init() {
             try {
@@ -151,8 +153,7 @@ export function useWebRTC({
 
             async function onSignal(data: WebRTCSignal) {
                 const { from, userId, signal } = data;
-                const existing = remoteStreams.find((r) => r.socketId === from);
-                const username = existing?.username ?? userId;
+                const username = userId;
 
                 if (signal.type === "offer") {
                     const pc = createPC(from, userId, username);
@@ -222,9 +223,9 @@ export function useWebRTC({
             socket.off("webrtc:existing-peers");
             socket.off("webrtc:signal");
             socket.off("webrtc:peer-left");
-            peerConns.current.forEach((pc) => pc.close());
-            peerConns.current.clear();
-            pendingCandidates.current.clear();
+            connections.forEach((pc) => pc.close());
+            connections.clear();
+            candidateQueue.clear();
             localStreamRef.current?.getTracks().forEach((t) => t.stop());
             localStreamRef.current = null;
             setLocalStream(null);

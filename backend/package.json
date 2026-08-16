@@ -7,13 +7,11 @@
         "build": "tsc",
         "start": "node dist/server.js",
         "typecheck": "tsc --noEmit",
+        "test": "npm run build && node --test tests/*.test.js",
         "db:migrate": "prisma migrate dev",
         "db:generate": "prisma generate",
         "db:seed": "ts-node --project prisma/tsconfig.json prisma/seed.ts",
         "db:studio": "prisma studio"
-    },
-    "prisma": {
-        "seed": "ts-node --project prisma/tsconfig.json prisma/seed.ts"
     },
     "keywords": [],
     "author": "",

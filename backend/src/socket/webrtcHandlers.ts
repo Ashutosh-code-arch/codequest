@@ -6,6 +6,13 @@ const roomPeers = new Map<string, PeerInfo[]>();
 
 export function registerWebRTCHandlers(io: TypedServer, socket: TypedSocket) {
     socket.on("webrtc:join", ({ roomId }: { roomId: string }) => {
+        if (socket.data.roomId !== roomId || !socket.rooms.has(roomId)) {
+            socket.emit("error", {
+                code: "FORBIDDEN",
+                message: "Join the room before starting video",
+            });
+            return;
+        }
         const userId = socket.data.userId;
         const username = socket.data.username;
         const existing = roomPeers.get(roomId) ?? [];
@@ -28,7 +35,14 @@ export function registerWebRTCHandlers(io: TypedServer, socket: TypedSocket) {
     // Pure passthrough - forward signal to target socket only
     socket.on("webrtc:signal", ({ to, signal }) => {
         const target = io.sockets.sockets.get(to);
-        if (!target) {
+        const roomId = socket.data.roomId;
+        if (
+            !target ||
+            !roomId ||
+            target.data.roomId !== roomId ||
+            !socket.rooms.has(roomId) ||
+            !target.rooms.has(roomId)
+        ) {
             logger.debug({ to }, "WebRTC signal: target socket not found");
             return;
         }
