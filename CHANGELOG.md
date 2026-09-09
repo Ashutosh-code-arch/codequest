@@ -2,6 +2,14 @@
 
 All notable changes to CodeQuest are documented here.
 
+## [1.0.1] - 2026-09-09
+
+### Fixed
+
+- Vercel CI now runs from the repository root so the configured `frontend`
+  project directory is applied exactly once
+- Updated the Vercel CLI used by GitHub Actions
+
 ## [1.0.0] - 2026-09-09
 
 ### Added
@@ -28,4 +36,5 @@ All notable changes to CodeQuest are documented here.
 - Admin seeding is idempotent for the reserved administrator account
 - Authentication error responses and the current-user API path are consistent
 
+[1.0.1]: https://github.com/Ashutosh-code-arch/codequest/releases/tag/v1.0.1
 [1.0.0]: https://github.com/Ashutosh-code-arch/codequest/releases/tag/v1.0.0
