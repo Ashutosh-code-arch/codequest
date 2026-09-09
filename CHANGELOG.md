@@ -2,6 +2,13 @@
 
 All notable changes to CodeQuest are documented here.
 
+## [1.0.2] - 2026-09-09
+
+### Fixed
+
+- Backend startup now applies pending Prisma migrations before accepting traffic,
+  ensuring the persisted Yjs snapshot schema is present after deployment
+
 ## [1.0.1] - 2026-09-09
 
 ### Fixed
@@ -36,5 +43,6 @@ All notable changes to CodeQuest are documented here.
 - Admin seeding is idempotent for the reserved administrator account
 - Authentication error responses and the current-user API path are consistent
 
+[1.0.2]: https://github.com/Ashutosh-code-arch/codequest/releases/tag/v1.0.2
 [1.0.1]: https://github.com/Ashutosh-code-arch/codequest/releases/tag/v1.0.1
 [1.0.0]: https://github.com/Ashutosh-code-arch/codequest/releases/tag/v1.0.0

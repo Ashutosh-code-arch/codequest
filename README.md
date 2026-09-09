@@ -193,7 +193,8 @@ Configure these GitHub Actions secrets:
 - `VERCEL_PROJECT_ID`
 
 Configure the backend and frontend environment variables in Render and Vercel
-respectively. Node.js `24.x` is declared in both packages and in CI.
+respectively. Node.js `24.x` is declared in both packages and in CI. The backend
+start command applies pending Prisma migrations before starting the server.
 
 ## License
 
