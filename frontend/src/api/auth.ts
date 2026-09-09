@@ -31,7 +31,7 @@ export async function loginApi(data: {
 
 export async function getMeApi(): Promise<unknown> {
     const res = await api.get<{ success: boolean; data: { user: User } }>(
-        "api/v1/auth/me",
+        "/api/v1/auth/me",
     );
     return res.data.data!.user;
 }

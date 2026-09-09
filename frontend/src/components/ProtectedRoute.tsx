@@ -18,7 +18,7 @@ export function AdminRoute() {
     }
 
     if (!isAdmin()) {
-        return <Navigate to="/unauthorized" replace />;
+        return <Navigate to="/dashboard" replace />;
     }
 
     return <Outlet />;

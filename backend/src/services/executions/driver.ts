@@ -5,7 +5,11 @@ export function wrapWithDriver(
     driverCode: string,
     language: LangKey,
 ): string {
-    // Simple placeholder replacement
-    // The driver template has {{USER_CODE}} where the solution goes
+    const placeholderCount = driverCode.match(/{{USER_CODE}}/g)?.length ?? 0;
+    if (placeholderCount !== 1) {
+        throw new Error(
+            `Invalid ${language} driver: expected exactly one {{USER_CODE}} placeholder`,
+        );
+    }
     return driverCode.replace("{{USER_CODE}}", userCode);
 }

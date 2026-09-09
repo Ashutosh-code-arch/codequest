@@ -3,6 +3,11 @@ const assert = require("node:assert/strict");
 
 const { wrapWithDriver } = require("../dist/services/executions/driver.js");
 const {
+    completeDriverCode,
+    completeStarterCode,
+    SUPPORTED_LANGUAGES,
+} = require("../dist/services/questions/templates.js");
+const {
     getRemainingRoomSeconds,
 } = require("../dist/services/rooms/timing.js");
 const { createRoomSchema } = require("../dist/validators/room.js");
@@ -37,4 +42,22 @@ test("driver wrapping inserts the submitted code", () => {
         wrapWithDriver("function solve() {}", "before\n{{USER_CODE}}\nafter", "JAVASCRIPT"),
         "before\nfunction solve() {}\nafter",
     );
+});
+
+test("driver wrapping rejects templates that can discard submitted code", () => {
+    assert.throws(
+        () => wrapWithDriver("print(42)", "print('missing placeholder')", "PYTHON"),
+        /exactly one {{USER_CODE}}/,
+    );
+});
+
+test("question templates are complete for every supported language", () => {
+    const starters = completeStarterCode({ JAVASCRIPT: "console.log(42);" });
+    const drivers = completeDriverCode(undefined);
+
+    assert.equal(starters.JAVASCRIPT, "console.log(42);");
+    for (const language of SUPPORTED_LANGUAGES) {
+        assert.ok(starters[language].trim());
+        assert.equal(drivers[language], "{{USER_CODE}}");
+    }
 });

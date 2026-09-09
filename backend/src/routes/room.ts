@@ -4,6 +4,19 @@ import { createRoomSchema } from "../validators/room";
 import { prisma } from "../lib/prisma";
 import { logger } from "../lib/logger";
 import { stopRoomTimer } from "../socket/timerHandlers";
+import { completeQuestionTemplates } from "../services/questions/templates";
+
+function completeRoomQuestionTemplates<
+    T extends { questions: Array<{ question: { starterCode?: unknown; driverCode?: unknown } }> },
+>(room: T): T {
+    return {
+        ...room,
+        questions: room.questions.map((roomQuestion) => ({
+            ...roomQuestion,
+            question: completeQuestionTemplates(roomQuestion.question),
+        })),
+    };
+}
 
 const router = Router();
 router.use(authenticate);
@@ -29,6 +42,7 @@ router.post("/", async (req, res) => {
         // Verify all questions exist and are active
         const questions = await prisma.question.findMany({
             where: { id: { in: questionIds }, isActive: true },
+            include: { _count: { select: { testCases: true } } },
         });
 
         if (questions.length !== questionIds.length) {
@@ -37,6 +51,18 @@ router.post("/", async (req, res) => {
                 error: {
                     code: "INVALID_QUESTIONS",
                     message: "One or more questions not found",
+                    statusCode: 400,
+                },
+            });
+            return;
+        }
+        if (questions.some((question) => question._count.testCases === 0)) {
+            res.status(400).json({
+                success: false,
+                error: {
+                    code: "QUESTIONS_NOT_READY",
+                    message:
+                        "Every selected question must have at least one test case",
                     statusCode: 400,
                 },
             });
@@ -95,7 +121,7 @@ router.post("/", async (req, res) => {
 router.get("/questions", async (req, res) => {
     try {
         const questions = await prisma.question.findMany({
-            where: { isActive: true },
+            where: { isActive: true, testCases: { some: {} } },
             orderBy: { createdAt: "desc" },
             select: {
                 id: true,
@@ -197,7 +223,14 @@ router.post("/:id/join", async (req, res) => {
             },
         });
 
-        res.json({ success: true, data: { room: fullRoom } });
+        res.json({
+            success: true,
+            data: {
+                room: fullRoom
+                    ? completeRoomQuestionTemplates(fullRoom)
+                    : fullRoom,
+            },
+        });
     } catch (err) {
         logger.error(err, "POST /rooms/:id/join failed");
         res.status(500).json({
@@ -259,7 +292,12 @@ router.get("/:id", async (req, res) => {
             return;
         }
 
-        res.json({ success: true, data: { room } });
+        res.json({
+            success: true,
+            data: {
+                room: completeRoomQuestionTemplates(room),
+            },
+        });
     } catch (err) {
         logger.error(err, "GET /rooms/:id failed");
         res.status(500).json({
@@ -332,6 +370,15 @@ router.get("/:id/snapshots", async (req, res) => {
             where: { roomId: req.params.id },
             orderBy: { savedAt: "desc" },
             take: 20,
+            select: {
+                id: true,
+                roomId: true,
+                questionId: true,
+                code: true,
+                language: true,
+                savedAt: true,
+                savedById: true,
+            },
         });
         res.json({ success: true, data: { snapshots } });
     } catch (err) {

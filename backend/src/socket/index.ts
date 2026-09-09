@@ -7,38 +7,7 @@ import { registerRoomHandlers } from "./roomHandlers";
 import { registerYjsHandlers } from "./yjsHandlers";
 import { registerChatHandlers } from "./chatHandlers";
 import { registerWebRTCHandlers } from "./webrtcHandlers";
-
-const STARTER_CODE: Record<string, string> = {
-    JAVASCRIPT: `function solution() {
-    // your code here
-}
-`,
-    PYTHON: `def solution():
-    # your code here
-    pass
-`,
-    JAVA: `class Solution {
-    public void solution() {
-        // your code here
-    }
-}
-`,
-    CPP: `#include <bits/stdc++.h>
-using namespace std;
-
-int main() {
-    // your code here
-    return 0;
-}
-`,
-    C: `#include <stdio.h>
-
-int main() {
-    // your code here
-    return 0;
-}
-`,
-};
+import { saveRoomLanguageSnapshots } from "./yjsHandlers";
 
 export function initSocket(server: Server) {
     const io = server as TypedServer;
@@ -99,6 +68,10 @@ export function initSocket(server: Server) {
                 return;
             }
             try {
+                const previousLanguage = socket.data.language ?? "JAVASCRIPT";
+                if (previousLanguage === language) return;
+
+                await saveRoomLanguageSnapshots(roomId, previousLanguage);
                 const result = await prisma.room.updateMany({
                     where: { id: roomId, status: "ACTIVE" },
                     data: {
@@ -122,10 +95,8 @@ export function initSocket(server: Server) {
                         client.data.language = language;
                     }
                 }
-                const starterCode = STARTER_CODE[language] ?? "";
                 io.to(roomId).emit("language:changed", {
                     language,
-                    starterCode,
                 });
                 logger.debug({ roomId, language }, "Language changed");
             } catch (err) {

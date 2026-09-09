@@ -1,6 +1,7 @@
 export interface WebRTCSignal {
     from: string;
     userId: string;
+    username: string;
     signal: RTCSignalData;
 }
 

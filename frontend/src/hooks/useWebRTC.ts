@@ -114,28 +114,21 @@ export function useWebRTC({
         const connections = peerConns.current;
         const candidateQueue = pendingCandidates.current;
 
-        async function init() {
-            try {
-                const stream = await navigator.mediaDevices.getUserMedia({
-                    video: { width: 640, height: 480, frameRate: 24 },
-                    audio: true,
-                });
-                if (!active) {
-                    stream.getTracks().forEach((t) => t.stop());
-                    return;
-                }
-                localStreamRef.current = stream;
-                setLocalStream(stream);
-            } catch {
-                setPermError(
-                    "Camera/mic permission denied. Enable in browser settings.",
-                );
-                return;
-            }
+        function resetPeerConnections() {
+            connections.forEach((pc) => pc.close());
+            connections.clear();
+            candidateQueue.clear();
+            setRemoteStreams([]);
+        }
 
+        function joinVideoRoom() {
+            if (!active || !localStreamRef.current || !socket.connected) return;
+            resetPeerConnections();
             socket.emit("webrtc:join", { roomId });
+        }
 
-            async function onExistingPeers({ peers }: { peers: PeerInfo[] }) {
+        async function onExistingPeers({ peers }: { peers: PeerInfo[] }) {
+            try {
                 for (const peer of peers) {
                     const pc = createPC(
                         peer.socketId,
@@ -149,11 +142,15 @@ export function useWebRTC({
                         signal: { type: "offer", sdp: offer.sdp! },
                     });
                 }
+            } catch (error) {
+                console.error("Failed to connect to video peers", error);
+                setPermError("Could not establish the video connection.");
             }
+        }
 
-            async function onSignal(data: WebRTCSignal) {
-                const { from, userId, signal } = data;
-                const username = userId;
+        async function onSignal(data: WebRTCSignal) {
+            try {
+                const { from, userId, username, signal } = data;
 
                 if (signal.type === "offer") {
                     const pc = createPC(from, userId, username);
@@ -177,55 +174,79 @@ export function useWebRTC({
                         });
                         await flushCandidates(from, pc);
                     }
-                } else if (signal.type === "ice-candidate") {
+                } else {
                     const pc = peerConns.current.get(from);
                     if (pc?.remoteDescription) {
-                        try {
-                            await pc.addIceCandidate(
-                                new RTCIceCandidate(signal.candidate),
-                            );
-                        } catch (err) {
-                            console.warn("Failed to add ICE candidate:", err);
-                        }
+                        await pc.addIceCandidate(
+                            new RTCIceCandidate(signal.candidate),
+                        );
                     } else {
-                        const buf = pendingCandidates.current.get(from) ?? [];
+                        const queued = pendingCandidates.current.get(from) ?? [];
                         pendingCandidates.current.set(from, [
-                            ...buf,
+                            ...queued,
                             signal.candidate,
                         ]);
                     }
                 }
+            } catch (error) {
+                console.error("WebRTC signaling failed", error);
+                setPermError("Could not establish the video connection.");
             }
-
-            function onPeerLeft({
-                socketId,
-            }: {
-                userId: string;
-                socketId: string;
-            }) {
-                peerConns.current.get(socketId)?.close();
-                peerConns.current.delete(socketId);
-                setRemoteStreams((prev) =>
-                    prev.filter((r) => r.socketId !== socketId),
-                );
-            }
-
-            socket.on("webrtc:existing-peers", onExistingPeers);
-            socket.on("webrtc:signal", onSignal);
-            socket.on("webrtc:peer-left", onPeerLeft);
         }
 
+        function onPeerLeft({ socketId }: { userId: string; socketId: string }) {
+            peerConns.current.get(socketId)?.close();
+            peerConns.current.delete(socketId);
+            pendingCandidates.current.delete(socketId);
+            setRemoteStreams((prev) =>
+                prev.filter((stream) => stream.socketId !== socketId),
+            );
+        }
+
+        async function init() {
+            setPermError("");
+            if (!navigator.mediaDevices?.getUserMedia) {
+                setPermError(
+                    "Camera and microphone require HTTPS or localhost in a supported browser.",
+                );
+                return;
+            }
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({
+                    video: { width: 640, height: 480, frameRate: 24 },
+                    audio: true,
+                });
+                if (!active) {
+                    stream.getTracks().forEach((t) => t.stop());
+                    return;
+                }
+                localStreamRef.current = stream;
+                setLocalStream(stream);
+            } catch (error) {
+                console.error("Camera/microphone access failed", error);
+                setPermError(
+                    "Camera/mic permission denied. Enable in browser settings.",
+                );
+                return;
+            }
+
+            joinVideoRoom();
+        }
+
+        socket.on("webrtc:existing-peers", onExistingPeers);
+        socket.on("webrtc:signal", onSignal);
+        socket.on("webrtc:peer-left", onPeerLeft);
+        socket.on("connect", joinVideoRoom);
         init();
 
         return () => {
             active = false;
             socket.emit("webrtc:leave", { roomId });
-            socket.off("webrtc:existing-peers");
-            socket.off("webrtc:signal");
-            socket.off("webrtc:peer-left");
-            connections.forEach((pc) => pc.close());
-            connections.clear();
-            candidateQueue.clear();
+            socket.off("webrtc:existing-peers", onExistingPeers);
+            socket.off("webrtc:signal", onSignal);
+            socket.off("webrtc:peer-left", onPeerLeft);
+            socket.off("connect", joinVideoRoom);
+            resetPeerConnections();
             localStreamRef.current?.getTracks().forEach((t) => t.stop());
             localStreamRef.current = null;
             setLocalStream(null);

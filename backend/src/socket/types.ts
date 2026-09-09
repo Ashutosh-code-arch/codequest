@@ -26,10 +26,7 @@ export interface ServerToClientEvents {
     "timer:sync": (data: { secondsRemaining: number }) => void;
     "room:time-up": () => void;
     "yjs:message": (data: ArrayBuffer) => void;
-    "language:changed": (data: {
-        language: string;
-        starterCode: string;
-    }) => void;
+    "language:changed": (data: { language: string }) => void;
     "room:existing-participants": (data: {
         participants: Array<{
             userId: string;
@@ -89,6 +86,7 @@ export type RTCSignalData =
 export interface WebRTCSignal {
     from: string;
     userId: string;
+    username: string;
     signal: RTCSignalData;
 }
 

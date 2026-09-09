@@ -17,6 +17,12 @@ import {
     type QuestionWithTestCases,
 } from "../api/admin";
 import { useAuthStore } from "../store/authStore";
+import {
+    DEFAULT_DRIVER_CODE,
+    DEFAULT_STARTER_CODE,
+    LANGUAGE_KEYS,
+    type LangKey,
+} from "../config/languages";
 
 // ── Difficulty badge ───────────────────────────────────────────────────────
 function DiffBadge({ d }: { d: string }) {
@@ -88,8 +94,6 @@ function QuestionForm({
     onSave: (q: Question) => void;
     onClose: () => void;
 }) {
-    const LANGUAGES = ["JAVASCRIPT", "PYTHON", "JAVA", "CPP", "C"] as const;
-
     const [form, setForm] = useState<CreateQuestionPayload>({
         title: initial?.title ?? "",
         description: initial?.description ?? "",
@@ -100,13 +104,15 @@ function QuestionForm({
     const [error, setError] = useState("");
     const [saving, setSaving] = useState(false);
 
-    const [starterCode, setStarterCode] = useState<Record<string, string>>(
-        (initial?.starterCode as Record<string, string>) ?? {},
-    );
-    const [driverCode, setDriverCode] = useState<Record<string, string>>(
-        (initial?.driverCode as Record<string, string>) ?? {},
-    );
-    const [activeLang, setActiveLang] = useState<string>("JAVASCRIPT");
+    const [starterCode, setStarterCode] = useState<Record<string, string>>({
+        ...DEFAULT_STARTER_CODE,
+        ...initial?.starterCode,
+    });
+    const [driverCode, setDriverCode] = useState<Record<string, string>>({
+        ...DEFAULT_DRIVER_CODE,
+        ...initial?.driverCode,
+    });
+    const [activeLang, setActiveLang] = useState<LangKey>("JAVASCRIPT");
 
     function addTag() {
         const t = tagInput.trim().toLowerCase();
@@ -250,7 +256,7 @@ function QuestionForm({
                     Starter code (what user sees in editor)
                 </label>
                 <div className="flex gap-1 mb-2">
-                    {LANGUAGES.map((l) => (
+                    {LANGUAGE_KEYS.map((l) => (
                         <button
                             key={l}
                             type="button"
@@ -382,10 +388,6 @@ function TestCaseManager({
     }, [questionId]);
 
     async function handleAdd() {
-        if (!form.input || !form.expectedOutput) {
-            setError("Input and expected output are required");
-            return;
-        }
         setSaving(true);
         setError("");
         try {
@@ -750,10 +752,10 @@ export default function AdminPanel() {
             <aside className="hidden md:flex md:w-56 lg:w-60 bg-white border-r border-gray-100 flex-col p-4 shrink-0">
                 <div className="flex items-center gap-2 px-1 mb-8">
                     <div className="w-7 h-7 bg-violet-600 rounded-md flex items-center justify-center shrink-0">
-                        <span className="text-white text-xs font-bold">CC</span>
+                        <span className="text-white text-xs font-bold">CQ</span>
                     </div>
                     <span className="font-semibold text-gray-900 text-sm">
-                        Collab Code
+                        CodeQuest
                     </span>
                 </div>
                 <nav className="flex flex-col gap-1 flex-1">

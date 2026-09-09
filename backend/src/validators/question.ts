@@ -1,7 +1,30 @@
 import z from "zod";
 
 const difficulties = ["EASY", "MEDIUM", "HARD"] as const;
-const codeMapSchema = z.record(z.string().min(1), z.string().max(100000));
+const codeValueSchema = z.string().max(100000);
+const codeMapSchema = z
+    .object({
+        JAVASCRIPT: codeValueSchema.optional(),
+        PYTHON: codeValueSchema.optional(),
+        JAVA: codeValueSchema.optional(),
+        CPP: codeValueSchema.optional(),
+        C: codeValueSchema.optional(),
+    })
+    .strict();
+const driverCodeMapSchema = codeMapSchema.superRefine((drivers, ctx) => {
+    for (const [language, driver] of Object.entries(drivers)) {
+        if (!driver?.trim()) continue;
+        const placeholders = driver.match(/{{USER_CODE}}/g)?.length ?? 0;
+        if (placeholders !== 1) {
+            ctx.addIssue({
+                code: "custom",
+                path: [language],
+                message:
+                    "Driver code must contain exactly one {{USER_CODE}} placeholder",
+            });
+        }
+    }
+});
 
 export const createQuestionSchema = z.object({
     title: z.string().min(5, "Title must be at least 5 characters").max(200),
@@ -16,14 +39,14 @@ export const createQuestionSchema = z.object({
         .min(1, "At least one tag required")
         .max(10, "Maximum 10 tags"),
     starterCode: codeMapSchema.optional(),
-    driverCode: codeMapSchema.optional(),
+    driverCode: driverCodeMapSchema.optional(),
 });
 
 export const updateQuestionSchema = createQuestionSchema.partial();
 
 export const createTestCaseSchema = z.object({
-    input: z.string().min(1, "Input is required"),
-    expectedOutput: z.string().min(1, "Expected output is required"),
+    input: z.string().max(65536, "Input is too long"),
+    expectedOutput: z.string().max(65536, "Expected output is too long"),
     isHidden: z.boolean().default(false),
     timeLimit: z.number().int().min(500).max(10000).default(2000),
     memoryLimit: z.number().int().min(64).max(512).default(256),

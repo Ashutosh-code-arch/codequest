@@ -5,9 +5,7 @@ import type { Room, SupportedLanguage } from "../types";
 import { getRoomApi } from "../api/room";
 import { socket } from "../lib/sockets";
 import type { LangKey } from "../config/languages";
-import CollabEditor, {
-    type CollabEditorHandle,
-} from "../components/Editor/CollabEditor";
+import CollabEditor from "../components/Editor/CollabEditor";
 import QuestionPanel from "../components/Editor/QuestionPanel";
 import { useChat } from "../hooks/useChat";
 import ChatPanel from "../components/Chat/ChatPanel";
@@ -79,9 +77,8 @@ export default function Room() {
     const [isVideoOpen, setIsVideoOpen] = useState(false);
     const [socketDisconnected, setSocketDisconnected] = useState(false);
     const codeRef = useRef<string>("");
-    const collabEditorRef = useRef<CollabEditorHandle>(null);
 
-    const { messages, unreadCount, sendMessage, sendError } = useChat({
+    const { messages, unreadCount, sendMessage, sendError, markRead } = useChat({
         roomId: roomId ?? "",
         userId: user?.id ?? "",
         isPanelOpen: isChatOpen,
@@ -163,23 +160,6 @@ export default function Room() {
     useEffect(() => {
         selectedQuestionIdRef.current = selectedQuestionId;
     }, [selectedQuestionId]);
-
-    useEffect(() => {
-        if (!selectedQuestionId || !room) return;
-        const rq = room.questions.find(
-            (q) => q.questionId === selectedQuestionId,
-        );
-        if (!rq) return;
-
-        const starters = rq.question.starterCode as Record<
-            string,
-            string
-        > | null;
-        const starter = starters?.[language];
-        if (starter && collabEditorRef.current) {
-            collabEditorRef.current.insertStarterCode(starter);
-        }
-    }, [selectedQuestionId, language, room]);
 
     // ── Step 2: Socket — only runs after room is loaded ───────────────────
     useEffect(() => {
@@ -537,7 +517,6 @@ export default function Room() {
                             onLanguageChange={setLanguage}
                             // onCodeChange={setCurrentCode}
                             codeRef={codeRef}
-                            ref={collabEditorRef}
                             questionId={selectedQuestionId}
                         />
                     </div>
@@ -545,6 +524,7 @@ export default function Room() {
                     {/* Execution panel takes remaining height */}
                     <div className="h-64 shrink-0">
                         <ExecutionPanel
+                            key={`${selectedQuestionId}-${language}`}
                             // code={currentCode}
                             codeRef={codeRef}
                             language={language as SupportedLanguage}
@@ -628,7 +608,10 @@ export default function Room() {
                         // Collapsed state — show toggle button + unread badge
                         <div className="flex flex-col items-center pt-3 gap-3">
                             <button
-                                onClick={() => setIsChatOpen(true)}
+                                onClick={() => {
+                                    markRead();
+                                    setIsChatOpen(true);
+                                }}
                                 className="text-gray-500 hover:text-gray-300 transition"
                                 title="Open chat"
                             >

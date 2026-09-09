@@ -11,9 +11,16 @@ async function main() {
         throw new Error("ADMIN_EMAIL and ADMIN_PASSWORD must be set in .env");
     }
 
-    const existing = await prisma.user.findUnique({ where: { email } });
+    const existing = await prisma.user.findFirst({
+        where: { OR: [{ email }, { username: "admin" }] },
+    });
     if (existing) {
-        console.log("Admin user already exists - skipping seed");
+        const passwordHash = await bcrypt.hash(password, 12);
+        await prisma.user.update({
+            where: { id: existing.id },
+            data: { email, username: "admin", passwordHash, role: "ADMIN" },
+        });
+        console.log(`Admin user updated: ${email}`);
         return;
     }
 

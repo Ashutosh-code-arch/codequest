@@ -5,6 +5,7 @@ import { getRoomTimer, startRoomTimer } from "./timerHandlers";
 import { TypedServer, TypedSocket } from "./types";
 import { getRemainingRoomSeconds } from "../services/rooms/timing";
 import type { Server } from "socket.io";
+import { saveRoomDocument } from "./yjsHandlers";
 
 export function registerRoomHandlers(io: TypedServer, socket: TypedSocket) {
     socket.on("room:join", async ({ roomId }) => {
@@ -183,8 +184,14 @@ async function handleLeave(
     const userName = socket.data.username;
 
     try {
+        await saveRoomDocument(
+            roomId,
+            socket.data.language ?? "JAVASCRIPT",
+            socket.data.questionId,
+        );
         await socket.leave(roomId);
         socket.data.roomId = "";
+        socket.data.questionId = undefined;
 
         const hasAnotherConnection = Array.from(
             io.sockets.sockets.values(),

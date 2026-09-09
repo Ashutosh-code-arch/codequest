@@ -53,12 +53,10 @@ const submitSchema = z.object({
 });
 
 function normalizeOutput(s: string): string {
-    return s
-        .trim() // remove leading/trailing whitespace
-        .replace(/\r\n/g, "\n") // normalize Windows line endings
-        .replace(/[ \t]+/g, " ") // collapse multiple spaces/tabs to single space
-        .replace(/\n\s+/g, "\n") // remove leading whitespace on each line
-        .replace(/\s+\n/g, "\n"); // remove trailing whitespace on each line
+    const lines = s.replace(/\r\n?/g, "\n").split("\n");
+    while (lines.length && lines[0].trim() === "") lines.shift();
+    while (lines.length && lines.at(-1)?.trim() === "") lines.pop();
+    return lines.map((line) => line.trimEnd()).join("\n");
 }
 
 // ── POST /api/v1/execute ─────────────────────────────────────────────────
@@ -269,12 +267,17 @@ router.post("/submit", executionLimiter, async (req, res) => {
         const allPassed = passedCount === totalCount;
 
         // Determine overall status
-        const hastle = allResults.some(
+        const hasTle = allResults.some(
             (r) => r.status === "Time Limit Exceeded",
         );
         const hasMle = allResults.some((r) => r.status?.includes("Memory"));
         const hasErr = allResults.some(
-            (r) => r.status === "Error" || r.status?.includes("Runtime"),
+            (r) =>
+                r.status === "Error" ||
+                r.status?.includes("Runtime") ||
+                r.status?.includes("Compilation") ||
+                r.status?.includes("Internal") ||
+                r.status?.includes("Exec Format"),
         );
 
         let overallStatus:
@@ -284,7 +287,7 @@ router.post("/submit", executionLimiter, async (req, res) => {
             | "MLE"
             | "ERROR";
         if (allPassed) overallStatus = "ACCEPTED";
-        else if (hastle) overallStatus = "TLE";
+        else if (hasTle) overallStatus = "TLE";
         else if (hasMle) overallStatus = "MLE";
         else if (hasErr) overallStatus = "ERROR";
         else overallStatus = "WRONG_ANSWER";

@@ -15,7 +15,11 @@ export function registerWebRTCHandlers(io: TypedServer, socket: TypedSocket) {
         }
         const userId = socket.data.userId;
         const username = socket.data.username;
-        const existing = roomPeers.get(roomId) ?? [];
+        const existing = (roomPeers.get(roomId) ?? []).filter((peer) => {
+            if (peer.socketId === socket.id) return false;
+            const candidate = io.sockets.sockets.get(peer.socketId);
+            return candidate?.connected && candidate.rooms.has(roomId);
+        });
 
         // Tell new joiner who is already here - they will send offers
         socket.emit("webrtc:existing-peers", { peers: existing });
@@ -49,6 +53,7 @@ export function registerWebRTCHandlers(io: TypedServer, socket: TypedSocket) {
         target.emit("webrtc:signal", {
             from: socket.id,
             userId: socket.data.userId,
+            username: socket.data.username,
             signal,
         });
     });
@@ -69,7 +74,8 @@ export function registerWebRTCHandlers(io: TypedServer, socket: TypedSocket) {
             const filtered = (roomPeers.get(roomId) ?? []).filter(
                 (p) => p.socketId !== socket.id,
             );
-            roomPeers.set(roomId, filtered);
+            if (filtered.length) roomPeers.set(roomId, filtered);
+            else roomPeers.delete(roomId);
             io.to(roomId).emit("webrtc:peer-left", {
                 userId: socket.data.userId,
                 socketId: socket.id,

@@ -6,6 +6,7 @@ import { prisma } from "../lib/prisma";
 import { TypedServer, TypedSocket } from "./types";
 import * as encoding from "lib0/encoding";
 import * as decoding from "lib0/decoding";
+import { completeStarterCode } from "../services/questions/templates";
 
 // ------ Message types (match y-websocket protocol) --------------------
 const MSG_SYNC = 0;
@@ -17,10 +18,32 @@ interface RoomYState {
     doc: Y.Doc;
     awareness: awarenessProtocol.Awareness;
     saveTimer: NodeJS.Timeout | null;
+    roomId: string;
+    language: string;
+    questionId?: string;
+    lastSavedCode: string;
+    hasPersistedState: boolean;
+    saving: Promise<void> | null;
 }
 
 const roomYDocs = new Map<string, RoomYState>();
 const pendingRoomYDocs = new Map<string, Promise<RoomYState>>();
+const socketAwareness = new Map<
+    string,
+    { documentKey: string; clientIds: Set<number> }
+>();
+
+function readAwarenessClientIds(update: Uint8Array): number[] {
+    const decoder = decoding.createDecoder(update);
+    const count = decoding.readVarUint(decoder);
+    const clientIds: number[] = [];
+    for (let index = 0; index < count; index += 1) {
+        clientIds.push(decoding.readVarUint(decoder));
+        decoding.readVarUint(decoder); // awareness clock
+        decoding.readVarString(decoder); // serialized awareness state
+    }
+    return clientIds;
+}
 
 export function getRoomDocKey(
     roomId: string,
@@ -60,9 +83,12 @@ async function createRoomDoc(
     questionId: string | undefined,
     key: string,
 ): Promise<RoomYState> {
-
     const doc = new Y.Doc();
     const awareness = new awarenessProtocol.Awareness(doc);
+    let initialCode = "";
+    let lastSavedCode = "";
+    let hasPersistedState = false;
+    let shouldPersistInitialState = false;
 
     // ── Restore from latest snapshot if one exists ─────────────────────────
     try {
@@ -70,39 +96,146 @@ async function createRoomDoc(
             where: {
                 roomId,
                 language: language as any,
-                questionId: questionId,
+                questionId: questionId ?? null,
             },
             orderBy: { savedAt: "desc" },
         });
-        if (snapshot && snapshot.code.trim()) {
-            // Apply the saved code into the Y.Doc before any client connects
-            doc.transact(() => {
-                const yText = doc.getText("monaco");
-                yText.delete(0, yText.length);
-                yText.insert(0, snapshot.code);
+
+        if (snapshot?.yState) {
+            Y.applyUpdate(doc, new Uint8Array(snapshot.yState));
+            initialCode = doc.getText("monaco").toString();
+            lastSavedCode = initialCode;
+            hasPersistedState = true;
+        } else if (snapshot) {
+            initialCode = snapshot.code;
+            lastSavedCode = snapshot.code;
+            shouldPersistInitialState = true;
+        } else if (questionId) {
+            const question = await prisma.question.findUnique({
+                where: { id: questionId },
+                select: { starterCode: true },
             });
+            initialCode = completeStarterCode(question?.starterCode)[
+                language as keyof ReturnType<typeof completeStarterCode>
+            ];
+            shouldPersistInitialState = true;
         }
     } catch (err) {
         logger.error(err, "Failed to restore Y.js doc from snapshot");
     }
 
-    // Auto-save snapshot every 60 seconds
-    const saveTimer = setInterval(
-        () => saveSnapshot(roomId, doc, language, questionId),
-        60_000,
-    );
+    if (initialCode) {
+        doc.getText("monaco").insert(0, initialCode);
+    }
 
-    const state: RoomYState = { doc, awareness, saveTimer };
+    const state: RoomYState = {
+        doc,
+        awareness,
+        saveTimer: null,
+        roomId,
+        language,
+        questionId,
+        lastSavedCode,
+        hasPersistedState,
+        saving: null,
+    };
+    doc.on("update", () => scheduleSnapshot(state));
     roomYDocs.set(key, state);
+
+    if (shouldPersistInitialState) scheduleSnapshot(state);
 
     logger.debug({ roomId, language, key }, "Y.js doc created for room");
     return state;
 }
 
+function scheduleSnapshot(state: RoomYState) {
+    if (state.saveTimer) clearTimeout(state.saveTimer);
+    state.saveTimer = setTimeout(() => {
+        state.saveTimer = null;
+        void flushRoomSnapshot(state);
+    }, 1_000);
+}
+
+async function persistSnapshot(state: RoomYState, code: string) {
+    const roomData = await prisma.room.findUnique({
+        where: { id: state.roomId },
+        select: { status: true },
+    });
+    if (!roomData || roomData.status !== "ACTIVE") return false;
+
+    const where = {
+        roomId: state.roomId,
+        questionId: state.questionId ?? null,
+        language: state.language as any,
+    };
+    const yState = Buffer.from(Y.encodeStateAsUpdate(state.doc));
+    const existing = await prisma.codeSnapshot.findFirst({
+        where,
+        orderBy: { savedAt: "desc" },
+        select: { id: true },
+    });
+
+    if (existing) {
+        await prisma.codeSnapshot.update({
+            where: { id: existing.id },
+            data: { code, yState, savedAt: new Date() },
+        });
+    } else {
+        await prisma.codeSnapshot.create({
+            data: {
+                ...where,
+                code,
+                yState,
+                savedById: "system",
+            },
+        });
+    }
+    return true;
+}
+
+async function flushRoomSnapshot(state: RoomYState): Promise<void> {
+    if (state.saveTimer) {
+        clearTimeout(state.saveTimer);
+        state.saveTimer = null;
+    }
+
+    if (state.saving) await state.saving;
+
+    const code = state.doc.getText("monaco").toString();
+    if (code === state.lastSavedCode && state.hasPersistedState) return;
+
+    const operation = (async () => {
+        try {
+            if (await persistSnapshot(state, code)) {
+                state.lastSavedCode = code;
+                state.hasPersistedState = true;
+                logger.debug(
+                    {
+                        roomId: state.roomId,
+                        language: state.language,
+                        questionId: state.questionId,
+                    },
+                    "Code snapshot saved",
+                );
+            }
+        } catch (err) {
+            logger.error(err, "Failed to save code snapshot");
+        }
+    })();
+
+    state.saving = operation;
+    await operation;
+    if (state.saving === operation) state.saving = null;
+
+    if (state.doc.getText("monaco").toString() !== state.lastSavedCode) {
+        scheduleSnapshot(state);
+    }
+}
+
 function destroyRoomDoc(roomId: string) {
     for (const [key, state] of roomYDocs.entries()) {
         if (!key.startsWith(`${roomId}:`)) continue;
-        if (state.saveTimer) clearInterval(state.saveTimer);
+        if (state.saveTimer) clearTimeout(state.saveTimer);
         state.doc.destroy();
         roomYDocs.delete(key);
     }
@@ -113,47 +246,64 @@ async function saveAllRoomSnapshots(roomId: string) {
     const saves: Promise<void>[] = [];
     for (const [key, state] of roomYDocs.entries()) {
         if (!key.startsWith(`${roomId}:`)) continue;
-        const [, language, questionId] = key.split(":");
-        saves.push(saveSnapshot(roomId, state.doc, language, questionId));
+        saves.push(flushRoomSnapshot(state));
     }
     await Promise.all(saves);
 }
 
-async function saveSnapshot(
+async function saveRoomDocument(
     roomId: string,
-    doc: Y.Doc,
-    language?: string,
+    language: string,
     questionId?: string,
 ) {
-    try {
-        const code = doc.getText("monaco").toString();
-        if (!code.trim()) return;
-        const roomData = await prisma.room.findUnique({
-            where: { id: roomId },
-            select: { language: true, status: true },
-        });
-        if (!roomData || roomData.status !== "ACTIVE") return;
+    const state = roomYDocs.get(getRoomDocKey(roomId, language, questionId));
+    if (state) await flushRoomSnapshot(state);
+}
 
-        const lang = language ?? roomData.language;
-
-        await prisma.codeSnapshot.create({
-            data: {
-                roomId,
-                questionId: questionId ?? null,
-                code,
-                language: lang as any,
-                savedById: "system",
-            },
-        });
-        logger.debug({ roomId }, "Code snapshot saved");
-    } catch (err) {
-        logger.error(err, "Failed to save code snapshot");
+async function saveRoomLanguageSnapshots(roomId: string, language: string) {
+    const saves: Promise<void>[] = [];
+    for (const state of roomYDocs.values()) {
+        if (state.roomId === roomId && state.language === language) {
+            saves.push(flushRoomSnapshot(state));
+        }
     }
+    await Promise.all(saves);
 }
 
 // ------ Socket handlers --------------------------------------------
 
-export function registerYjsHandlers(_io: TypedServer, socket: TypedSocket) {
+export function registerYjsHandlers(io: TypedServer, socket: TypedSocket) {
+    function clearSocketAwareness(documentKey?: string) {
+        const tracked = socketAwareness.get(socket.id);
+        if (!tracked || (documentKey && tracked.documentKey !== documentKey)) {
+            return;
+        }
+
+        const state = roomYDocs.get(tracked.documentKey);
+        const clientIds = [...tracked.clientIds];
+        if (state && clientIds.length) {
+            awarenessProtocol.removeAwarenessStates(
+                state.awareness,
+                clientIds,
+                socket,
+            );
+            const encoder = encoding.createEncoder();
+            encoding.writeVarInt(encoder, MSG_AWARENESS);
+            encoding.writeVarUint8Array(
+                encoder,
+                awarenessProtocol.encodeAwarenessUpdate(
+                    state.awareness,
+                    clientIds,
+                ),
+            );
+            io.to(`yjs:${tracked.documentKey}`).emit(
+                "yjs:message",
+                encoding.toUint8Array(encoder).buffer as ArrayBuffer,
+            );
+        }
+        socketAwareness.delete(socket.id);
+    }
+
     // Client sends raw Y.js binary messages
     socket.on("yjs:message", async (data: ArrayBuffer) => {
         const roomId = socket.data.roomId;
@@ -166,44 +316,58 @@ export function registerYjsHandlers(_io: TypedServer, socket: TypedSocket) {
         const channel = `yjs:${key}`;
         if (!socket.rooms.has(channel)) return;
 
-        const state = await getOrCreateRoomDoc(roomId, language, questionId);
-        const arr = new Uint8Array(data);
-        const decoder = decoding.createDecoder(arr);
-        const msgType = decoding.readVarInt(decoder);
+        try {
+            const arr = new Uint8Array(data);
+            if (arr.byteLength > 1_000_000) return;
 
-        if (msgType === MSG_SYNC) {
-            // Handle Y.js sync protocol step 1 and step 2
-            const encoder = encoding.createEncoder();
-            encoding.writeVarInt(encoder, MSG_SYNC);
-            syncProtocol.readSyncMessage(decoder, encoder, state.doc, null);
+            const state = await getOrCreateRoomDoc(roomId, language, questionId);
+            const decoder = decoding.createDecoder(arr);
+            const msgType = decoding.readVarInt(decoder);
 
-            const reply = encoding.toUint8Array(encoder);
-            if (reply.length > 1) {
-                // send sync reply back to this client only
-                socket.emit("yjs:message", reply.buffer as ArrayBuffer);
-            }
+            if (msgType === MSG_SYNC) {
+                const encoder = encoding.createEncoder();
+                encoding.writeVarInt(encoder, MSG_SYNC);
+                syncProtocol.readSyncMessage(decoder, encoder, state.doc, null);
 
-            // Broadcast update to all OTHER clients in room
-            const update = Y.encodeStateAsUpdate(state.doc);
-            const broadcastEncoder = encoding.createEncoder();
-            encoding.writeVarInt(broadcastEncoder, MSG_SYNC);
-            syncProtocol.writeUpdate(broadcastEncoder, update);
-            socket
-                .to(channel)
-                .emit(
+                const reply = encoding.toUint8Array(encoder);
+                if (reply.length > 1) {
+                    socket.emit("yjs:message", reply.buffer as ArrayBuffer);
+                }
+
+                const update = Y.encodeStateAsUpdate(state.doc);
+                const broadcastEncoder = encoding.createEncoder();
+                encoding.writeVarInt(broadcastEncoder, MSG_SYNC);
+                syncProtocol.writeUpdate(broadcastEncoder, update);
+                socket.to(channel).emit(
                     "yjs:message",
                     encoding.toUint8Array(broadcastEncoder)
                         .buffer as ArrayBuffer,
                 );
-        } else if (msgType === MSG_AWARENESS) {
-            // Broadcast awareness (cursor positions) to everyone including sender
-            const awarenessUpdate = decoding.readVarUint8Array(decoder);
-            awarenessProtocol.applyAwarenessUpdate(
-                state.awareness,
-                awarenessUpdate,
-                socket,
+            } else if (msgType === MSG_AWARENESS) {
+                const awarenessUpdate = decoding.readVarUint8Array(decoder);
+                const clientIds = readAwarenessClientIds(awarenessUpdate);
+                const tracked = socketAwareness.get(socket.id);
+                if (tracked && tracked.documentKey !== key) {
+                    clearSocketAwareness(tracked.documentKey);
+                }
+                const current = socketAwareness.get(socket.id) ?? {
+                    documentKey: key,
+                    clientIds: new Set<number>(),
+                };
+                clientIds.forEach((clientId) => current.clientIds.add(clientId));
+                socketAwareness.set(socket.id, current);
+                awarenessProtocol.applyAwarenessUpdate(
+                    state.awareness,
+                    awarenessUpdate,
+                    socket,
+                );
+                socket.to(channel).emit("yjs:message", arr.buffer as ArrayBuffer);
+            }
+        } catch (err) {
+            logger.warn(
+                { err, userId: socket.data.userId, roomId },
+                "Ignored invalid Y.js message",
             );
-            socket.to(channel).emit("yjs:message", arr.buffer as ArrayBuffer);
         }
     });
 
@@ -214,8 +378,22 @@ export function registerYjsHandlers(_io: TypedServer, socket: TypedSocket) {
 
         const language = socket.data.language ?? "JAVASCRIPT";
         const questionId = data?.questionId;
+
+        if (socket.data.questionId !== questionId) {
+            await saveRoomDocument(
+                roomId,
+                language,
+                socket.data.questionId,
+            );
+        }
+
         const key = getRoomDocKey(roomId, language, questionId);
         const channel = `yjs:${key}`;
+
+        const tracked = socketAwareness.get(socket.id);
+        if (tracked && tracked.documentKey !== key) {
+            clearSocketAwareness(tracked.documentKey);
+        }
 
         for (const joinedRoom of socket.rooms) {
             if (joinedRoom.startsWith("yjs:") && joinedRoom !== channel) {
@@ -228,18 +406,21 @@ export function registerYjsHandlers(_io: TypedServer, socket: TypedSocket) {
         const state = await getOrCreateRoomDoc(roomId, language, questionId);
         const encoder = encoding.createEncoder();
         encoding.writeVarInt(encoder, MSG_SYNC);
-        syncProtocol.writeSyncStep1(encoder, state.doc);
+        syncProtocol.writeUpdate(encoder, Y.encodeStateAsUpdate(state.doc));
         socket.emit(
             "yjs:message",
             encoding.toUint8Array(encoder).buffer as ArrayBuffer,
         );
     });
+
+    socket.on("disconnect", () => clearSocketAwareness());
 }
 
 export {
     getOrCreateRoomDoc,
     destroyRoomDoc,
-    saveSnapshot,
     saveAllRoomSnapshots,
+    saveRoomDocument,
+    saveRoomLanguageSnapshots,
     roomYDocs,
 };

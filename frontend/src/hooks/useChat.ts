@@ -55,10 +55,7 @@ export function useChat({ roomId, userId, isPanelOpen }: UseChatOptions) {
         };
     }, [roomId, userId, isPanelOpen]);
 
-    // Reset unread when panel opens
-    // useEffect(() => {
-    //     if (isPanelOpen) setUnread(0);
-    // }, [isPanelOpen]);
+    const markRead = useCallback(() => setUnread(0), []);
 
     // ── Send message with optimistic update ───────────────────────────────
     const sendMessage = useCallback(
@@ -113,5 +110,5 @@ export function useChat({ roomId, userId, isPanelOpen }: UseChatOptions) {
         };
     }, []);
 
-    return { messages, unreadCount, sendMessage, sendError };
+    return { messages, unreadCount, sendMessage, sendError, markRead };
 }

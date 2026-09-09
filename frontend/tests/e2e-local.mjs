@@ -111,6 +111,14 @@ function attachYDoc(socket) {
     };
 }
 
+function replaceCode(doc, code) {
+    const text = doc.getText("monaco");
+    doc.transact(() => {
+        text.delete(0, text.length);
+        text.insert(0, code);
+    });
+}
+
 const sockets = [];
 let cleanupAdminToken;
 let cleanupQuestionId;
@@ -165,6 +173,14 @@ try {
         )
     ).data.question;
     cleanupQuestionId = question.id;
+    assert.deepEqual(
+        Object.keys(question.starterCode).sort(),
+        ["C", "CPP", "JAVA", "JAVASCRIPT", "PYTHON"].sort(),
+    );
+    assert.deepEqual(
+        Object.keys(question.driverCode).sort(),
+        ["C", "CPP", "JAVA", "JAVASCRIPT", "PYTHON"].sort(),
+    );
 
     await expectStatus(
         `/api/v1/admin/questions/${question.id}/testcases`,
@@ -245,6 +261,32 @@ try {
     await connectAndJoin(creatorSocket, room.id);
     await connectAndJoin(collaboratorSocket, room.id);
 
+    const creatorVideoPeers = once(creatorSocket, "webrtc:existing-peers");
+    creatorSocket.emit("webrtc:join", { roomId: room.id });
+    assert.equal((await creatorVideoPeers).peers.length, 0);
+
+    const collaboratorVideoPeers = once(
+        collaboratorSocket,
+        "webrtc:existing-peers",
+    );
+    collaboratorSocket.emit("webrtc:join", { roomId: room.id });
+    const peerList = (await collaboratorVideoPeers).peers;
+    assert.equal(peerList.length, 1);
+    assert.equal(peerList[0].socketId, creatorSocket.id);
+    assert.equal(peerList[0].username, creator.user.username);
+
+    const forwardedSignal = once(
+        creatorSocket,
+        "webrtc:signal",
+        (value) => value?.from === collaboratorSocket.id,
+    );
+    collaboratorSocket.emit("webrtc:signal", {
+        to: creatorSocket.id,
+        signal: { type: "offer", sdp: "e2e-offer" },
+    });
+    const signal = await forwardedSignal;
+    assert.equal(signal.username, collaborator.user.username);
+
     const chatOnCreator = once(
         creatorSocket,
         "chat:new-message",
@@ -262,10 +304,15 @@ try {
     const collaboratorY = attachYDoc(collaboratorSocket);
     creatorSocket.emit("yjs:sync-request", { questionId: question.id });
     collaboratorSocket.emit("yjs:sync-request", { questionId: question.id });
-    await new Promise((resolve) => setTimeout(resolve, 100));
-    creatorY.doc.getText("monaco").insert(0, "console.log(42);");
     await waitUntil(
-        () => collaboratorY.doc.getText("monaco").toString() === "console.log(42);",
+        () => creatorY.doc.getText("monaco").toString() === "console.log(42);",
+        "initial JavaScript starter code",
+    );
+    replaceCode(creatorY.doc, "console.log(41 + 1);");
+    await waitUntil(
+        () =>
+            collaboratorY.doc.getText("monaco").toString() ===
+            "console.log(41 + 1);",
         "collaborative JavaScript update",
     );
 
@@ -288,16 +335,77 @@ try {
     const collaboratorPython = attachYDoc(collaboratorSocket);
     creatorSocket.emit("yjs:sync-request", { questionId: question.id });
     collaboratorSocket.emit("yjs:sync-request", { questionId: question.id });
-    await new Promise((resolve) => setTimeout(resolve, 100));
-    creatorPython.doc.getText("monaco").insert(0, "print(42)");
+    await waitUntil(
+        () => creatorPython.doc.getText("monaco").toString().includes("def solve"),
+        "default Python starter code",
+    );
+    replaceCode(creatorPython.doc, "print(42)");
     await waitUntil(
         () => collaboratorPython.doc.getText("monaco").toString() === "print(42)",
         "collaborative Python update",
     );
 
+    const changedBackA = once(
+        creatorSocket,
+        "language:changed",
+        (value) => value?.language === "JAVASCRIPT",
+    );
+    const changedBackB = once(
+        collaboratorSocket,
+        "language:changed",
+        (value) => value?.language === "JAVASCRIPT",
+    );
+    creatorSocket.emit("language:change", {
+        roomId: room.id,
+        language: "JAVASCRIPT",
+    });
+    await Promise.all([changedBackA, changedBackB]);
+    creatorPython.dispose();
+    collaboratorPython.dispose();
+
+    const creatorJavaScriptAgain = attachYDoc(creatorSocket);
+    const collaboratorJavaScriptAgain = attachYDoc(collaboratorSocket);
+    creatorSocket.emit("yjs:sync-request", { questionId: question.id });
+    collaboratorSocket.emit("yjs:sync-request", { questionId: question.id });
+    await waitUntil(
+        () =>
+            collaboratorJavaScriptAgain.doc.getText("monaco").toString() ===
+            "console.log(41 + 1);",
+        "JavaScript code after switching languages",
+    );
+
+    collaboratorJavaScriptAgain.dispose();
     collaboratorSocket.disconnect();
     await new Promise((resolve) => setTimeout(resolve, 150));
     await connectAndJoin(collaboratorSocket, room.id);
+    const collaboratorAfterRejoin = attachYDoc(collaboratorSocket);
+    collaboratorSocket.emit("yjs:sync-request", { questionId: question.id });
+    await waitUntil(
+        () =>
+            collaboratorAfterRejoin.doc.getText("monaco").toString() ===
+            "console.log(41 + 1);",
+        "JavaScript code after leaving and rejoining",
+    );
+
+    await new Promise((resolve) => setTimeout(resolve, 1_200));
+    const snapshots = await expectStatus(
+        `/api/v1/rooms/${room.id}/snapshots`,
+        { token: creator.token },
+        200,
+    );
+    assert.ok(
+        snapshots.data.snapshots.some(
+            (snapshot) =>
+                snapshot.language === "JAVASCRIPT" &&
+                snapshot.code === "console.log(41 + 1);",
+        ),
+    );
+    assert.ok(
+        snapshots.data.snapshots.some(
+            (snapshot) =>
+                snapshot.language === "PYTHON" && snapshot.code === "print(42)",
+        ),
+    );
 
     const execution = await expectStatus(
         "/api/v1/execute",
@@ -311,21 +419,34 @@ try {
     assert.equal(execution.data.status, "Accepted");
     assert.equal(execution.data.stdout.trim(), "7");
 
-    const submission = await expectStatus(
-        "/api/v1/submit",
-        {
-            token: creator.token,
-            method: "POST",
-            body: {
-                code: "console.log(42);",
-                language: "JAVASCRIPT",
-                questionId: question.id,
-                roomId: room.id,
+    const solutions = {
+        JAVASCRIPT: "console.log(42);",
+        PYTHON: "print(42)",
+        JAVA: "public class Main { public static void main(String[] args) { System.out.println(42); } }",
+        CPP: "#include <iostream>\nint main() { std::cout << 42 << '\\n'; }",
+        C: "#include <stdio.h>\nint main(void) { printf(\"42\\n\"); return 0; }",
+    };
+    for (const [submissionLanguage, code] of Object.entries(solutions)) {
+        const submission = await expectStatus(
+            "/api/v1/submit",
+            {
+                token: creator.token,
+                method: "POST",
+                body: {
+                    code,
+                    language: submissionLanguage,
+                    questionId: question.id,
+                    roomId: room.id,
+                },
             },
-        },
-        200,
-    );
-    assert.equal(submission.data.status, "ACCEPTED");
+            200,
+        );
+        assert.equal(
+            submission.data.status,
+            "ACCEPTED",
+            `${submissionLanguage} submission failed`,
+        );
+    }
 
     const history = await expectStatus("/api/v1/history", { token: creator.token }, 200);
     assert.ok(history.data.rooms.some((item) => item.id === room.id));
@@ -346,8 +467,8 @@ try {
         400,
     );
 
-    creatorPython.dispose();
-    collaboratorPython.dispose();
+    creatorJavaScriptAgain.dispose();
+    collaboratorAfterRejoin.dispose();
     console.log(
         JSON.stringify(
             {
@@ -359,9 +480,11 @@ try {
                     "question/testcase creation",
                     "room create/join/access/end",
                     "socket join authorization/reconnect",
+                    "WebRTC peer discovery and signaling",
                     "chat broadcast",
                     "Yjs JavaScript/Python collaboration",
-                    "Judge0 execute/submit",
+                    "per-language starter code and persistence after rejoin",
+                    "Judge0 execute and five-language submission",
                     "history",
                 ],
             },

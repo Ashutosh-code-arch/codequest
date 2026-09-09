@@ -17,10 +17,7 @@ interface ServerToClientEvents {
     "room:time-up": () => void;
     error: (data: { code: string; message: string }) => void;
     "yjs:message": (data: ArrayBuffer) => void;
-    "language:changed": (data: {
-        language: string;
-        starterCode: string;
-    }) => void;
+    "language:changed": (data: { language: string }) => void;
     "room:existing-participants": (data: {
         participants: Array<{
             userId: string;
@@ -58,7 +55,6 @@ export const socket: Socket<ServerToClientEvents, ClientToServerEvents> = io(
     import.meta.env.VITE_WS_URL as string,
     {
         autoConnect: false,
-        transports: ["websocket"], // skip polling - faster connection
         auth: { token: "" },
     },
 );

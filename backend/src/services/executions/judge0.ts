@@ -84,21 +84,40 @@ export async function judge0Execute(
         stdin: b64encode(normalizedStdin),
         cpu_time_limit: timeLimit / 1000, // Judge0 uses seconds
         memory_limit: memoryLimit * 1024, // Judge0 uses KB
-        enable_base64: true,
-        encode_base64: true,
     };
 
-    const url = `${process.env.JUDGE0_URL}/submissions?wait=true&base64_encoded=true`;
+    const judge0Url = process.env.JUDGE0_URL?.replace(/\/+$/, "");
+    if (!judge0Url) {
+        throw new Error("JUDGE0_URL is not configured");
+    }
 
-    const response = await fetch(url, {
-        method: "POST",
-        headers: {
-            "Content-Type": "application/json",
-            "X-RapidAPI-Key": process.env.JUDGE0_API_KEY ?? "",
-            "X-RapidAPI-Host": "judge0-ce.p.rapidapi.com",
-        },
-        body: JSON.stringify(body),
-    });
+    const url = `${judge0Url}/submissions?wait=true&base64_encoded=true`;
+    const headers: Record<string, string> = {
+        "Content-Type": "application/json",
+    };
+    const apiKey = process.env.JUDGE0_API_KEY?.trim();
+    if (apiKey) {
+        headers["X-RapidAPI-Key"] = apiKey;
+        headers["X-RapidAPI-Host"] = "judge0-ce.p.rapidapi.com";
+    }
+
+    const controller = new AbortController();
+    const timeout = setTimeout(
+        () => controller.abort(),
+        Math.max(15_000, timeLimit + 10_000),
+    );
+
+    let response: Response;
+    try {
+        response = await fetch(url, {
+            method: "POST",
+            headers,
+            body: JSON.stringify(body),
+            signal: controller.signal,
+        });
+    } finally {
+        clearTimeout(timeout);
+    }
 
     if (!response.ok) {
         const text = await response.text();

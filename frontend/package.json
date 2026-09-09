@@ -1,7 +1,18 @@
 {
-  "name": "frontend",
+  "name": "codequest-frontend",
   "private": true,
-  "version": "0.0.0",
+  "version": "1.0.0",
+  "description": "Realtime collaborative coding client for CodeQuest",
+  "license": "MIT",
+  "author": "Ashutosh",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Ashutosh-code-arch/codequest.git"
+  },
+  "homepage": "https://codequest-mu-three.vercel.app",
+  "bugs": {
+    "url": "https://github.com/Ashutosh-code-arch/codequest/issues"
+  },
   "type": "module",
   "engines": {
     "node": "24.x"

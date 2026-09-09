@@ -150,7 +150,7 @@ router.post("/login", authLimiter, async (req, res) => {
         logger.error(err, "Login failed");
         res.status(500).json({
             success: false,
-            message: {
+            error: {
                 code: "SERVER_ERROR",
                 message: "Login failed",
                 statusCode: 500,

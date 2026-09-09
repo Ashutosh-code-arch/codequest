@@ -55,7 +55,7 @@ export default function Login() {
                             </span>
                         </div>
                         <span className="text-white font-medium text-sm">
-                            Collab Code
+                            CodeQuest
                         </span>
                     </div>
                 </div>
@@ -95,7 +95,7 @@ export default function Login() {
                             </span>
                         </div>
                         <span className="text-gray-900 font-medium text-sm">
-                            Collab Code
+                            CodeQuest
                         </span>
                     </div>
 

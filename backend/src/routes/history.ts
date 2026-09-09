@@ -153,6 +153,15 @@ router.get("/:roomId", async (req, res) => {
             prisma.codeSnapshot.findFirst({
                 where: { roomId },
                 orderBy: { savedAt: "desc" },
+                select: {
+                    id: true,
+                    roomId: true,
+                    questionId: true,
+                    code: true,
+                    language: true,
+                    savedAt: true,
+                    savedById: true,
+                },
             }),
         ]);
 

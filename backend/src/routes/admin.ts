@@ -10,6 +10,11 @@ import {
 } from "../validators/question";
 import { io } from "../server";
 import { stopRoomTimer } from "../socket/timerHandlers";
+import {
+    completeDriverCode,
+    completeQuestionTemplates,
+    completeStarterCode,
+} from "../services/questions/templates";
 
 const router = Router();
 
@@ -96,7 +101,7 @@ router.get("/questions", async (req, res) => {
         res.json({
             success: true,
             data: {
-                questions,
+                questions: questions.map(completeQuestionTemplates),
                 total,
                 page,
                 limit,
@@ -134,7 +139,10 @@ router.get("/questions/:id", async (req, res) => {
             });
             return;
         }
-        return res.json({ success: true, data: { question } });
+        return res.json({
+            success: true,
+            data: { question: completeQuestionTemplates(question) },
+        });
     } catch (err) {
         logger.error(err, "GET /admin/questions/:id failed");
         res.status(500).json({
@@ -164,13 +172,21 @@ router.post("/questions", async (req, res) => {
     }
     try {
         const question = await prisma.question.create({
-            data: { ...result.data, createdById: req.user!.id },
+            data: {
+                ...result.data,
+                starterCode: completeStarterCode(result.data.starterCode),
+                driverCode: completeDriverCode(result.data.driverCode),
+                createdById: req.user!.id,
+            },
         });
         logger.info(
             { questionId: question.id, adminId: req.user!.id },
             "Question created",
         );
-        res.status(201).json({ success: true, data: { question } });
+        res.status(201).json({
+            success: true,
+            data: { question: completeQuestionTemplates(question) },
+        });
     } catch (err) {
         logger.error(err, "POST /admin/questions failed");
         res.status(500).json({
@@ -201,12 +217,53 @@ router.put("/questions/:id", async (req, res) => {
     }
 
     try {
+        const existing = await prisma.question.findUnique({
+            where: { id: req.params.id },
+            select: { starterCode: true, driverCode: true },
+        });
+        if (!existing) {
+            res.status(404).json({
+                success: false,
+                error: {
+                    code: "NOT_FOUND",
+                    message: "Question not found",
+                    statusCode: 404,
+                },
+            });
+            return;
+        }
+
         const question = await prisma.question.update({
             where: { id: req.params.id },
-            data: result.data,
+            data: {
+                ...result.data,
+                ...(result.data.starterCode !== undefined
+                    ? {
+                          starterCode: completeStarterCode(
+                              {
+                                  ...(existing.starterCode as object),
+                                  ...result.data.starterCode,
+                              },
+                          ),
+                      }
+                    : {}),
+                ...(result.data.driverCode !== undefined
+                    ? {
+                          driverCode: completeDriverCode(
+                              {
+                                  ...(existing.driverCode as object),
+                                  ...result.data.driverCode,
+                              },
+                          ),
+                      }
+                    : {}),
+            },
         });
         logger.info({ questionId: question.id }, "Question updated");
-        res.json({ success: true, data: { question } });
+        res.json({
+            success: true,
+            data: { question: completeQuestionTemplates(question) },
+        });
     } catch (err: unknown) {
         const isNotFound = (err as { code?: string }).code === "P2025";
         if (isNotFound) {

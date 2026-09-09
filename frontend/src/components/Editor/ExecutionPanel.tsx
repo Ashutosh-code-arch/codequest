@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState } from "react";
 import { runCodeApi, submitCodeApi } from "../../api/execution";
 import type {
     ExecuteResult,
@@ -132,9 +132,9 @@ export default function ExecutionPanel({
     const [submitResult, setSubmitResult] = useState<SubmitResult | null>(null);
     const [runError, setRunError] = useState("");
     const [submitError, setSubmitError] = useState("");
-    const abortRef = useRef<AbortController | null>(null);
 
     async function handleRun() {
+        setActiveTab("run");
         const code = codeRef.current;
         if (!code.trim()) {
             setRunError("Editor is empty");
@@ -165,6 +165,7 @@ export default function ExecutionPanel({
     }
 
     async function handleSubmit() {
+        setActiveTab("submit");
         const code = codeRef.current;
         if (!code.trim()) {
             setSubmitError("Editor is empty");
@@ -198,8 +199,6 @@ export default function ExecutionPanel({
             setSubmitting(false);
         }
     }
-
-    void abortRef;
 
     return (
         <div className="flex flex-col h-full bg-gray-900 border-t border-gray-700">
@@ -380,19 +379,17 @@ export default function ExecutionPanel({
                                     )}
                                 </div>
 
-                                {runResult.stdout && (
-                                    <div>
-                                        <p className="text-xs text-gray-500 mb-1 uppercase tracking-wide font-medium">
-                                            Output
-                                        </p>
-                                        <pre
-                                            className="text-xs text-gray-200 bg-gray-800 border border-gray-700
+                                <div>
+                                    <p className="text-xs text-gray-500 mb-1 uppercase tracking-wide font-medium">
+                                        Output
+                                    </p>
+                                    <pre
+                                        className="text-xs text-gray-200 bg-gray-800 border border-gray-700
                                     rounded-lg p-3 overflow-x-auto whitespace-pre-wrap font-mono"
-                                        >
-                                            {runResult.stdout}
-                                        </pre>
-                                    </div>
-                                )}
+                                    >
+                                        {runResult.stdout || "(no output)"}
+                                    </pre>
+                                </div>
 
                                 {runResult.stderr && (
                                     <div>

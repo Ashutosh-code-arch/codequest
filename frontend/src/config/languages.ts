@@ -10,25 +10,43 @@ export const LANGUAGE_CONFIG: Record<LangKey, LangConfig> = {
     JAVASCRIPT: {
         label: "JavaScript",
         monacoLang: "javascript",
-        starterCode: `function solution() {
-        // your code here
-        }
-        `,
+        starterCode: `const fs = require("fs");
+
+function solve(input) {
+    // Write your solution here.
+}
+
+const input = fs.readFileSync(0, "utf8").trim();
+const result = solve(input);
+if (result !== undefined) console.log(result);
+`,
     },
     PYTHON: {
         label: "Python",
         monacoLang: "python",
-        starterCode: `def solution():
-    # your code here
+        starterCode: `import sys
+
+def solve(data: str):
+    # Write your solution here.
     pass
+
+result = solve(sys.stdin.read().strip())
+if result is not None:
+    print(result)
 `,
     },
     JAVA: {
         label: "Java",
         monacoLang: "java",
-        starterCode: `class Solution {
-    public void solution() {
-        // your code here
+        starterCode: `import java.util.*;
+
+public class Main {
+    static void solve(Scanner scanner) {
+        // Write your solution here.
+    }
+
+    public static void main(String[] args) {
+        solve(new Scanner(System.in));
     }
 }
 `,
@@ -37,12 +55,18 @@ export const LANGUAGE_CONFIG: Record<LangKey, LangConfig> = {
         label: "C++",
         monacoLang: "cpp",
         starterCode: `#include <bits/stdc++.h>
-                      using namespace std;
+using namespace std;
 
-                        int main() {
-                            // your code here
-                            return 0;
-                        }
+void solve() {
+    // Write your solution here.
+}
+
+int main() {
+    ios::sync_with_stdio(false);
+    cin.tie(nullptr);
+    solve();
+    return 0;
+}
 `,
     },
     C: {
@@ -50,12 +74,27 @@ export const LANGUAGE_CONFIG: Record<LangKey, LangConfig> = {
         monacoLang: "c",
         starterCode: `#include <stdio.h>
 
-                        int main() {
-                            // your code here
-                            return 0;
-                        }
+void solve(void) {
+    /* Write your solution here. */
+}
+
+int main(void) {
+    solve();
+    return 0;
+}
 `,
     },
 };
 
 export const LANGUAGE_KEYS = Object.keys(LANGUAGE_CONFIG) as LangKey[];
+
+export const DEFAULT_STARTER_CODE = Object.fromEntries(
+    LANGUAGE_KEYS.map((language) => [
+        language,
+        LANGUAGE_CONFIG[language].starterCode,
+    ]),
+) as Record<LangKey, string>;
+
+export const DEFAULT_DRIVER_CODE = Object.fromEntries(
+    LANGUAGE_KEYS.map((language) => [language, "{{USER_CODE}}"]),
+) as Record<LangKey, string>;

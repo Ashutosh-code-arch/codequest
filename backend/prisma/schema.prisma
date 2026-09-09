@@ -172,6 +172,7 @@ model CodeSnapshot {
   roomId     String?
   questionId String?
   code       String
+  yState     Bytes?
   language   Language
   savedAt    DateTime @default(now())
   savedById  String
