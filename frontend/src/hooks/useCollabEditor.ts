@@ -6,10 +6,20 @@ import * as awarenessProtocol from "y-protocols/awareness";
 import * as encoding from "lib0/encoding";
 import * as decoding from "lib0/decoding";
 import type * as Monaco from "monaco-editor";
-import { socket } from "../lib/sockets";
+import { socket, type YjsMessagePayload } from "../lib/sockets";
 
 const MSG_SYNC = 0;
 const MSG_AWARENESS = 1;
+
+function getDocumentKey(
+    roomId: string,
+    language: string,
+    questionId?: string,
+) {
+    return questionId
+        ? `${roomId}:${language}:${questionId}`
+        : `${roomId}:${language}`;
+}
 
 // Cursor colours — one per user slot (max 4 in a room)
 export const CURSOR_COLORS = ["#7C3AED", "#0891B2", "#D97706", "#BE185D"];
@@ -43,6 +53,7 @@ export function useCollabEditor({
 
         const ydoc = new Y.Doc();
         const awareness = new awarenessProtocol.Awareness(ydoc);
+        const documentKey = getDocumentKey(roomId, language, questionId);
 
         ydocRef.current = ydoc;
         awarenessRef.current = awareness;
@@ -70,8 +81,10 @@ export function useCollabEditor({
         });
 
         // ── Handle incoming Y.js messages from server ──────────────────────────
-        function handleYjsMessage(data: ArrayBuffer) {
-            const arr = new Uint8Array(data);
+        function handleYjsMessage(payload: YjsMessagePayload) {
+            if (payload.documentKey !== documentKey) return;
+
+            const arr = new Uint8Array(payload.update);
             const decoder = decoding.createDecoder(arr);
             const msgType = decoding.readVarUint(decoder);
 
@@ -89,7 +102,10 @@ export function useCollabEditor({
                     // Server sent step1 — reply with step2 (our full state)
                     const reply = encoding.toUint8Array(encoder);
                     if (reply.length > 1)
-                        socket.emit("yjs:message", reply.buffer as ArrayBuffer);
+                        socket.emit("yjs:message", {
+                            documentKey,
+                            update: reply.buffer as ArrayBuffer,
+                        });
                 }
 
                 setSynced(true);
@@ -110,10 +126,10 @@ export function useCollabEditor({
             const encoder = encoding.createEncoder();
             encoding.writeVarUint(encoder, MSG_SYNC);
             syncProtocol.writeUpdate(encoder, update);
-            socket.emit(
-                "yjs:message",
-                encoding.toUint8Array(encoder).buffer as ArrayBuffer,
-            );
+            socket.emit("yjs:message", {
+                documentKey,
+                update: encoding.toUint8Array(encoder).buffer as ArrayBuffer,
+            });
         }
 
         ydoc.on("update", handleDocUpdate);
@@ -138,10 +154,10 @@ export function useCollabEditor({
                     changedClients,
                 ),
             );
-            socket.emit(
-                "yjs:message",
-                encoding.toUint8Array(encoder).buffer as ArrayBuffer,
-            );
+            socket.emit("yjs:message", {
+                documentKey,
+                update: encoding.toUint8Array(encoder).buffer as ArrayBuffer,
+            });
         }
 
         awareness.on("update", handleAwarenessUpdate);

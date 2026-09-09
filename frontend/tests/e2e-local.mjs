@@ -56,6 +56,25 @@ function once(socket, event, predicate = () => true, timeoutMs = 8_000) {
     });
 }
 
+function collect(socket, event, count, onValue, timeoutMs = 8_000) {
+    return new Promise((resolve, reject) => {
+        const values = [];
+        const timer = setTimeout(() => {
+            socket.off(event, handler);
+            reject(new Error(`Timed out collecting ${event}`));
+        }, timeoutMs);
+        function handler(value) {
+            values.push(value);
+            onValue?.(value);
+            if (values.length !== count) return;
+            clearTimeout(timer);
+            socket.off(event, handler);
+            resolve(values);
+        }
+        socket.on(event, handler);
+    });
+}
+
 async function waitUntil(check, label, timeoutMs = 8_000) {
     const started = Date.now();
     while (Date.now() - started < timeoutMs) {
@@ -82,22 +101,31 @@ async function connectAndJoin(socket, roomId) {
     return participants;
 }
 
-function attachYDoc(socket) {
+function attachYDoc(socket, documentKey) {
     const doc = new Y.Doc();
-    const onMessage = (data) => {
-        const decoder = decoding.createDecoder(new Uint8Array(data));
+    const onMessage = (payload) => {
+        if (payload?.documentKey !== documentKey) return;
+        const decoder = decoding.createDecoder(new Uint8Array(payload.update));
         if (decoding.readVarUint(decoder) !== 0) return;
         const encoder = encoding.createEncoder();
         encoding.writeVarUint(encoder, 0);
         syncProtocol.readSyncMessage(decoder, encoder, doc, null);
         const reply = encoding.toUint8Array(encoder);
-        if (reply.length > 1) socket.emit("yjs:message", reply.buffer);
+        if (reply.length > 1) {
+            socket.emit("yjs:message", {
+                documentKey,
+                update: reply.buffer,
+            });
+        }
     };
     const onUpdate = (update) => {
         const encoder = encoding.createEncoder();
         encoding.writeVarUint(encoder, 0);
         syncProtocol.writeUpdate(encoder, update);
-        socket.emit("yjs:message", encoding.toUint8Array(encoder).buffer);
+        socket.emit("yjs:message", {
+            documentKey,
+            update: encoding.toUint8Array(encoder).buffer,
+        });
     };
     socket.on("yjs:message", onMessage);
     doc.on("update", onUpdate);
@@ -300,8 +328,10 @@ try {
     creatorSocket.emit("chat:message", { roomId: room.id, content: "realtime-e2e" });
     await Promise.all([chatOnCreator, chatOnCollaborator]);
 
-    const creatorY = attachYDoc(creatorSocket);
-    const collaboratorY = attachYDoc(collaboratorSocket);
+    const javaScriptDocumentKey = `${room.id}:JAVASCRIPT:${question.id}`;
+    const pythonDocumentKey = `${room.id}:PYTHON:${question.id}`;
+    const creatorY = attachYDoc(creatorSocket, javaScriptDocumentKey);
+    const collaboratorY = attachYDoc(collaboratorSocket, javaScriptDocumentKey);
     creatorSocket.emit("yjs:sync-request", { questionId: question.id });
     collaboratorSocket.emit("yjs:sync-request", { questionId: question.id });
     await waitUntil(
@@ -327,12 +357,13 @@ try {
         (value) => value?.language === "PYTHON",
     );
     creatorSocket.emit("language:change", { roomId: room.id, language: "PYTHON" });
+    replaceCode(creatorY.doc, "console.log(40 + 2);");
     await Promise.all([languageChangedA, languageChangedB]);
     creatorY.dispose();
     collaboratorY.dispose();
 
-    const creatorPython = attachYDoc(creatorSocket);
-    const collaboratorPython = attachYDoc(collaboratorSocket);
+    const creatorPython = attachYDoc(creatorSocket, pythonDocumentKey);
+    const collaboratorPython = attachYDoc(collaboratorSocket, pythonDocumentKey);
     creatorSocket.emit("yjs:sync-request", { questionId: question.id });
     collaboratorSocket.emit("yjs:sync-request", { questionId: question.id });
     await waitUntil(
@@ -363,14 +394,20 @@ try {
     creatorPython.dispose();
     collaboratorPython.dispose();
 
-    const creatorJavaScriptAgain = attachYDoc(creatorSocket);
-    const collaboratorJavaScriptAgain = attachYDoc(collaboratorSocket);
+    const creatorJavaScriptAgain = attachYDoc(
+        creatorSocket,
+        javaScriptDocumentKey,
+    );
+    const collaboratorJavaScriptAgain = attachYDoc(
+        collaboratorSocket,
+        javaScriptDocumentKey,
+    );
     creatorSocket.emit("yjs:sync-request", { questionId: question.id });
     collaboratorSocket.emit("yjs:sync-request", { questionId: question.id });
     await waitUntil(
         () =>
             collaboratorJavaScriptAgain.doc.getText("monaco").toString() ===
-            "console.log(41 + 1);",
+            "console.log(40 + 2);",
         "JavaScript code after switching languages",
     );
 
@@ -378,12 +415,15 @@ try {
     collaboratorSocket.disconnect();
     await new Promise((resolve) => setTimeout(resolve, 150));
     await connectAndJoin(collaboratorSocket, room.id);
-    const collaboratorAfterRejoin = attachYDoc(collaboratorSocket);
+    const collaboratorAfterRejoin = attachYDoc(
+        collaboratorSocket,
+        javaScriptDocumentKey,
+    );
     collaboratorSocket.emit("yjs:sync-request", { questionId: question.id });
     await waitUntil(
         () =>
             collaboratorAfterRejoin.doc.getText("monaco").toString() ===
-            "console.log(41 + 1);",
+            "console.log(40 + 2);",
         "JavaScript code after leaving and rejoining",
     );
 
@@ -397,9 +437,47 @@ try {
         snapshots.data.snapshots.some(
             (snapshot) =>
                 snapshot.language === "JAVASCRIPT" &&
-                snapshot.code === "console.log(41 + 1);",
+                snapshot.code === "console.log(40 + 2);",
         ),
     );
+
+    creatorJavaScriptAgain.dispose();
+    collaboratorAfterRejoin.dispose();
+
+    const rapidLanguages = ["PYTHON", "JAVA", "CPP", "C", "JAVASCRIPT"];
+    const rapidChanges = collect(
+        creatorSocket,
+        "language:changed",
+        rapidLanguages.length,
+        () =>
+            creatorSocket.emit("yjs:sync-request", {
+                questionId: question.id,
+            }),
+    );
+    for (const rapidLanguage of rapidLanguages) {
+        creatorSocket.emit("language:change", {
+            roomId: room.id,
+            language: rapidLanguage,
+        });
+    }
+    assert.deepEqual(
+        (await rapidChanges).map((change) => change.language),
+        rapidLanguages,
+    );
+
+    const javaScriptAfterRapidSwitches = attachYDoc(
+        creatorSocket,
+        javaScriptDocumentKey,
+    );
+    creatorSocket.emit("yjs:sync-request", { questionId: question.id });
+    await waitUntil(
+        () =>
+            javaScriptAfterRapidSwitches.doc
+                .getText("monaco")
+                .toString() === "console.log(40 + 2);",
+        "JavaScript code after rapid language switches",
+    );
+    javaScriptAfterRapidSwitches.dispose();
     assert.ok(
         snapshots.data.snapshots.some(
             (snapshot) =>
@@ -467,8 +545,6 @@ try {
         400,
     );
 
-    creatorJavaScriptAgain.dispose();
-    collaboratorAfterRejoin.dispose();
     console.log(
         JSON.stringify(
             {
@@ -484,6 +560,7 @@ try {
                     "chat broadcast",
                     "Yjs JavaScript/Python collaboration",
                     "per-language starter code and persistence after rejoin",
+                    "rapid language switching without cross-language code",
                     "Judge0 execute and five-language submission",
                     "history",
                 ],

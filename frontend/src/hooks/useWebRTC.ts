@@ -10,6 +10,25 @@ export interface RemoteStream {
     stream: MediaStream;
 }
 
+function getMediaErrorMessage(error: unknown): string {
+    const name = error instanceof DOMException ? error.name : "";
+    switch (name) {
+        case "NotAllowedError":
+        case "SecurityError":
+            return "Camera or microphone access is blocked. Allow both for this site in the browser and in macOS System Settings → Privacy & Security.";
+        case "NotFoundError":
+        case "DevicesNotFoundError":
+            return "No usable camera or microphone was found. Connect a device and check the browser input settings.";
+        case "NotReadableError":
+        case "TrackStartError":
+            return "The camera or microphone is busy. Close other apps using it, then reopen video.";
+        case "OverconstrainedError":
+            return "The selected camera cannot satisfy the requested video settings. Choose another camera in the browser.";
+        default:
+            return "Could not start the camera and microphone. Check site permissions and device settings, then try again.";
+    }
+}
+
 export function useWebRTC({
     roomId,
     enabled,
@@ -20,6 +39,7 @@ export function useWebRTC({
     const localStreamRef = useRef<MediaStream | null>(null);
     const peerConns = useRef(new Map<string, RTCPeerConnection>());
     const pendingCandidates = useRef(new Map<string, RTCIceCandidateInit[]>());
+    const remoteMediaStreams = useRef(new Map<string, MediaStream>());
 
     const [localStream, setLocalStream] = useState<MediaStream | null>(null);
     const [remoteStreams, setRemoteStreams] = useState<RemoteStream[]>([]);
@@ -44,7 +64,17 @@ export function useWebRTC({
             });
 
             pc.ontrack = (event) => {
-                const stream = event.streams[0];
+                const stream =
+                    event.streams[0] ??
+                    remoteMediaStreams.current.get(remoteSocketId) ??
+                    new MediaStream();
+                if (
+                    !event.streams[0] &&
+                    !stream.getTracks().some((track) => track.id === event.track.id)
+                ) {
+                    stream.addTrack(event.track);
+                }
+                remoteMediaStreams.current.set(remoteSocketId, stream);
                 setRemoteStreams((prev) => {
                     const idx = prev.findIndex(
                         (r) => r.socketId === remoteSocketId,
@@ -86,6 +116,7 @@ export function useWebRTC({
                     setRemoteStreams((prev) =>
                         prev.filter((r) => r.socketId !== remoteSocketId),
                     );
+                    remoteMediaStreams.current.delete(remoteSocketId);
                     peerConns.current.delete(remoteSocketId);
                 }
             };
@@ -118,6 +149,7 @@ export function useWebRTC({
             connections.forEach((pc) => pc.close());
             connections.clear();
             candidateQueue.clear();
+            remoteMediaStreams.current.clear();
             setRemoteStreams([]);
         }
 
@@ -198,6 +230,7 @@ export function useWebRTC({
             peerConns.current.get(socketId)?.close();
             peerConns.current.delete(socketId);
             pendingCandidates.current.delete(socketId);
+            remoteMediaStreams.current.delete(socketId);
             setRemoteStreams((prev) =>
                 prev.filter((stream) => stream.socketId !== socketId),
             );
@@ -222,11 +255,22 @@ export function useWebRTC({
                 }
                 localStreamRef.current = stream;
                 setLocalStream(stream);
+                setIsMuted(false);
+                setIsVideoOff(false);
+                stream.getVideoTracks()[0]?.addEventListener(
+                    "ended",
+                    () => {
+                        if (active) {
+                            setPermError(
+                                "Camera access stopped. Check browser and macOS camera permissions, then reopen video.",
+                            );
+                        }
+                    },
+                    { once: true },
+                );
             } catch (error) {
                 console.error("Camera/microphone access failed", error);
-                setPermError(
-                    "Camera/mic permission denied. Enable in browser settings.",
-                );
+                setPermError(getMediaErrorMessage(error));
                 return;
             }
 
@@ -251,6 +295,8 @@ export function useWebRTC({
             localStreamRef.current = null;
             setLocalStream(null);
             setRemoteStreams([]);
+            setIsMuted(false);
+            setIsVideoOff(false);
         };
     }, [roomId, enabled, createPC]);
 

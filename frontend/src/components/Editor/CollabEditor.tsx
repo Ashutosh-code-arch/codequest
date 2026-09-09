@@ -14,7 +14,6 @@ interface CollabEditorProps {
     userId: string;
     username: string;
     language: LangKey;
-    onLanguageChange: (lang: LangKey) => void;
     onCodeChange?: (code: string) => void;
     codeRef: { current: string };
     questionId?: string | null;
@@ -84,11 +83,11 @@ const CollabEditor = forwardRef<CollabEditorHandle, CollabEditorProps>(
         }, [getYDoc, props.codeRef]);
 
         function handleLanguageChange(newLang: LangKey) {
+            if (newLang === props.language) return;
             socket.emit("language:change", {
                 roomId: props.roomId,
                 language: newLang,
             });
-            props.onLanguageChange(newLang);
         }
 
         const monacoLang =

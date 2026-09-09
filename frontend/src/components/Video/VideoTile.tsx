@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 
 interface VideoTileProps {
     stream: MediaStream | null;
@@ -16,29 +16,45 @@ export default function VideoTile({
     isLocal = false,
 }: VideoTileProps) {
     const videoRef = useRef<HTMLVideoElement>(null);
+    const [playbackBlocked, setPlaybackBlocked] = useState(false);
 
     useEffect(() => {
-        if (videoRef.current && stream) {
-            videoRef.current.srcObject = stream;
-        }
+        const video = videoRef.current;
+        if (!video || !stream) return;
+
+        video.srcObject = stream;
+        void video
+            .play()
+            .then(() => setPlaybackBlocked(false))
+            .catch(() => setPlaybackBlocked(true));
+
+        return () => {
+            if (video.srcObject === stream) video.srcObject = null;
+        };
     }, [stream]);
+
+    function resumePlayback() {
+        if (!videoRef.current) return;
+        void videoRef.current
+            .play()
+            .then(() => setPlaybackBlocked(false))
+            .catch(() => setPlaybackBlocked(true));
+    }
 
     const initials = username.slice(0, 2).toUpperCase();
 
     return (
         <div className="relative bg-gray-800 rounded-xl overflow-hidden flex items-center justify-center aspect-video w-full h-full">
-            {stream && !videoOff ? (
+            {stream && (
                 <video
                     ref={videoRef}
                     autoPlay
                     playsInline
                     muted={isLocal}
-                    className={
-                        "w-full h-full object-cover" +
-                        (isLocal ? " scale-x-[-1]" : "")
-                    }
+                    className={`${videoOff ? "hidden " : ""}w-full h-full object-cover${isLocal ? " scale-x-[-1]" : ""}`}
                 />
-            ) : (
+            )}
+            {(!stream || videoOff) && (
                 <div className="flex flex-col items-center justify-center gap-2">
                     <div className="w-12 h-12 rounded-full bg-violet-700 flex items-center justify-center">
                         <span className="text-white font-semibold text-base">
@@ -51,6 +67,15 @@ export default function VideoTile({
                         </span>
                     )}
                 </div>
+            )}
+            {playbackBlocked && stream && !videoOff && (
+                <button
+                    type="button"
+                    onClick={resumePlayback}
+                    className="absolute inset-0 bg-black/50 text-white text-xs font-medium"
+                >
+                    Click to start video
+                </button>
             )}
             <div className="absolute bottom-2 left-2 flex items-center gap-1.5">
                 <span className="text-xs text-white bg-black/50 px-2 py-0.5 rounded-full">

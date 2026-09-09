@@ -9,6 +9,8 @@ import { registerChatHandlers } from "./chatHandlers";
 import { registerWebRTCHandlers } from "./webrtcHandlers";
 import { saveRoomLanguageSnapshots } from "./yjsHandlers";
 
+const roomLanguageChangeQueues = new Map<string, Promise<void>>();
+
 export function initSocket(server: Server) {
     const io = server as TypedServer;
 
@@ -54,7 +56,7 @@ export function initSocket(server: Server) {
         registerWebRTCHandlers(io, socket);
 
         // Language change — persist to DB + broadcast to room
-        socket.on("language:change", async ({ roomId, language }) => {
+        socket.on("language:change", ({ roomId, language }) => {
             const allowed = ["JAVASCRIPT", "PYTHON", "JAVA", "CPP", "C"];
             if (!allowed.includes(language)) return;
             if (
@@ -67,41 +69,63 @@ export function initSocket(server: Server) {
                 });
                 return;
             }
-            try {
-                const previousLanguage = socket.data.language ?? "JAVASCRIPT";
-                if (previousLanguage === language) return;
 
-                await saveRoomLanguageSnapshots(roomId, previousLanguage);
-                const result = await prisma.room.updateMany({
-                    where: { id: roomId, status: "ACTIVE" },
-                    data: {
-                        language: language as
-                            | "JAVASCRIPT"
-                            | "PYTHON"
-                            | "JAVA"
-                            | "CPP"
-                            | "C",
-                    },
-                });
-                if (result.count === 0) {
-                    socket.emit("error", {
-                        code: "ROOM_NOT_ACTIVE",
-                        message: "Room is not active",
-                    });
-                    return;
-                }
-                for (const client of io.sockets.sockets.values()) {
-                    if (client.rooms.has(roomId)) {
-                        client.data.language = language;
+            const previousChange =
+                roomLanguageChangeQueues.get(roomId) ?? Promise.resolve();
+            const change = previousChange
+                .catch(() => undefined)
+                .then(async () => {
+                    try {
+                        const previousLanguage =
+                            socket.data.language ?? "JAVASCRIPT";
+                        if (previousLanguage === language) return;
+
+                        await saveRoomLanguageSnapshots(
+                            roomId,
+                            previousLanguage,
+                        );
+                        const result = await prisma.room.updateMany({
+                            where: { id: roomId, status: "ACTIVE" },
+                            data: {
+                                language: language as
+                                    | "JAVASCRIPT"
+                                    | "PYTHON"
+                                    | "JAVA"
+                                    | "CPP"
+                                    | "C",
+                            },
+                        });
+                        if (result.count === 0) {
+                            socket.emit("error", {
+                                code: "ROOM_NOT_ACTIVE",
+                                message: "Room is not active",
+                            });
+                            return;
+                        }
+                        for (const client of io.sockets.sockets.values()) {
+                            if (client.rooms.has(roomId)) {
+                                client.data.language = language;
+                            }
+                        }
+                        io.to(roomId).emit("language:changed", {
+                            language,
+                        });
+                        logger.debug({ roomId, language }, "Language changed");
+                    } catch (err) {
+                        logger.error(err, "language:change failed");
+                        socket.emit("error", {
+                            code: "LANGUAGE_CHANGE_FAILED",
+                            message: "Failed to change language",
+                        });
                     }
-                }
-                io.to(roomId).emit("language:changed", {
-                    language,
                 });
-                logger.debug({ roomId, language }, "Language changed");
-            } catch (err) {
-                logger.error(err, "language:change failed");
-            }
+
+            roomLanguageChangeQueues.set(roomId, change);
+            void change.finally(() => {
+                if (roomLanguageChangeQueues.get(roomId) === change) {
+                    roomLanguageChangeQueues.delete(roomId);
+                }
+            });
         });
 
         socket.on("disconnect", (reason) => {

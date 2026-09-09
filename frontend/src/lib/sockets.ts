@@ -1,5 +1,10 @@
 import { io, Socket } from "socket.io-client";
 
+export interface YjsMessagePayload {
+    documentKey: string;
+    update: ArrayBuffer;
+}
+
 interface ServerToClientEvents {
     "room:user-joined": (data: {
         user: { id: string; username: string };
@@ -16,7 +21,7 @@ interface ServerToClientEvents {
     "timer:sync": (data: { secondsRemaining: number }) => void;
     "room:time-up": () => void;
     error: (data: { code: string; message: string }) => void;
-    "yjs:message": (data: ArrayBuffer) => void;
+    "yjs:message": (data: YjsMessagePayload) => void;
     "language:changed": (data: { language: string }) => void;
     "room:existing-participants": (data: {
         participants: Array<{
@@ -38,7 +43,7 @@ interface ClientToServerEvents {
     "room:join": (data: { roomId: string }) => void;
     "room:leave": (data: { roomId: string }) => void;
     "timer:sync-request": (data: { roomId: string }) => void;
-    "yjs:message": (data: ArrayBuffer) => void;
+    "yjs:message": (data: YjsMessagePayload) => void;
     // "yjs:sync-request": () => void;
     "yjs:sync-request": (data?: { questionId?: string }) => void;
     "language:change": (data: { roomId: string; language: string }) => void;

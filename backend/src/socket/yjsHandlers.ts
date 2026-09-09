@@ -273,6 +273,8 @@ async function saveRoomLanguageSnapshots(roomId: string, language: string) {
 // ------ Socket handlers --------------------------------------------
 
 export function registerYjsHandlers(io: TypedServer, socket: TypedSocket) {
+    let latestSyncRequest = 0;
+
     function clearSocketAwareness(documentKey?: string) {
         const tracked = socketAwareness.get(socket.id);
         if (!tracked || (documentKey && tracked.documentKey !== documentKey)) {
@@ -298,29 +300,40 @@ export function registerYjsHandlers(io: TypedServer, socket: TypedSocket) {
             );
             io.to(`yjs:${tracked.documentKey}`).emit(
                 "yjs:message",
-                encoding.toUint8Array(encoder).buffer as ArrayBuffer,
+                {
+                    documentKey: tracked.documentKey,
+                    update: encoding.toUint8Array(encoder)
+                        .buffer as ArrayBuffer,
+                },
             );
         }
         socketAwareness.delete(socket.id);
     }
 
     // Client sends raw Y.js binary messages
-    socket.on("yjs:message", async (data: ArrayBuffer) => {
+    socket.on("yjs:message", async (payload) => {
         const roomId = socket.data.roomId;
         if (!roomId) return;
 
-        // Get current room language from DB (or cache it in socket.data)
-        const language = socket.data.language ?? "JAVASCRIPT";
-        const questionId = socket.data.questionId;
-        const key = getRoomDocKey(roomId, language, questionId);
+        const key = payload?.documentKey;
         const channel = `yjs:${key}`;
-        if (!socket.rooms.has(channel)) return;
+        if (
+            !key ||
+            !key.startsWith(`${roomId}:`) ||
+            !socket.rooms.has(channel)
+        ) {
+            return;
+        }
 
         try {
-            const arr = new Uint8Array(data);
+            const arr = new Uint8Array(payload.update);
             if (arr.byteLength > 1_000_000) return;
 
-            const state = await getOrCreateRoomDoc(roomId, language, questionId);
+            // Route by the server-authorized Yjs channel rather than mutable
+            // socket language state. This preserves final keystrokes from the
+            // old editor while a language switch acknowledgement is in flight.
+            const state = roomYDocs.get(key);
+            if (!state || state.roomId !== roomId) return;
             const decoder = decoding.createDecoder(arr);
             const msgType = decoding.readVarInt(decoder);
 
@@ -331,7 +344,10 @@ export function registerYjsHandlers(io: TypedServer, socket: TypedSocket) {
 
                 const reply = encoding.toUint8Array(encoder);
                 if (reply.length > 1) {
-                    socket.emit("yjs:message", reply.buffer as ArrayBuffer);
+                    socket.emit("yjs:message", {
+                        documentKey: key,
+                        update: reply.buffer as ArrayBuffer,
+                    });
                 }
 
                 const update = Y.encodeStateAsUpdate(state.doc);
@@ -340,8 +356,11 @@ export function registerYjsHandlers(io: TypedServer, socket: TypedSocket) {
                 syncProtocol.writeUpdate(broadcastEncoder, update);
                 socket.to(channel).emit(
                     "yjs:message",
-                    encoding.toUint8Array(broadcastEncoder)
-                        .buffer as ArrayBuffer,
+                    {
+                        documentKey: key,
+                        update: encoding.toUint8Array(broadcastEncoder)
+                            .buffer as ArrayBuffer,
+                    },
                 );
             } else if (msgType === MSG_AWARENESS) {
                 const awarenessUpdate = decoding.readVarUint8Array(decoder);
@@ -361,7 +380,10 @@ export function registerYjsHandlers(io: TypedServer, socket: TypedSocket) {
                     awarenessUpdate,
                     socket,
                 );
-                socket.to(channel).emit("yjs:message", arr.buffer as ArrayBuffer);
+                socket.to(channel).emit("yjs:message", {
+                    documentKey: key,
+                    update: arr.buffer as ArrayBuffer,
+                });
             }
         } catch (err) {
             logger.warn(
@@ -373,6 +395,7 @@ export function registerYjsHandlers(io: TypedServer, socket: TypedSocket) {
 
     // When user joins a room - send them the current document state
     socket.on("yjs:sync-request", async (data?: { questionId?: string }) => {
+        const requestNumber = ++latestSyncRequest;
         const roomId = socket.data.roomId;
         if (!roomId) return;
 
@@ -389,6 +412,17 @@ export function registerYjsHandlers(io: TypedServer, socket: TypedSocket) {
 
         const key = getRoomDocKey(roomId, language, questionId);
         const channel = `yjs:${key}`;
+        const state = await getOrCreateRoomDoc(roomId, language, questionId);
+
+        // A faster language/question switch superseded this request while the
+        // document was loading. Never attach or send the stale document.
+        if (
+            requestNumber !== latestSyncRequest ||
+            socket.data.language !== language ||
+            socket.data.roomId !== roomId
+        ) {
+            return;
+        }
 
         const tracked = socketAwareness.get(socket.id);
         if (tracked && tracked.documentKey !== key) {
@@ -403,17 +437,22 @@ export function registerYjsHandlers(io: TypedServer, socket: TypedSocket) {
         await socket.join(channel);
         socket.data.questionId = questionId;
 
-        const state = await getOrCreateRoomDoc(roomId, language, questionId);
         const encoder = encoding.createEncoder();
         encoding.writeVarInt(encoder, MSG_SYNC);
         syncProtocol.writeUpdate(encoder, Y.encodeStateAsUpdate(state.doc));
         socket.emit(
             "yjs:message",
-            encoding.toUint8Array(encoder).buffer as ArrayBuffer,
+            {
+                documentKey: key,
+                update: encoding.toUint8Array(encoder).buffer as ArrayBuffer,
+            },
         );
     });
 
-    socket.on("disconnect", () => clearSocketAwareness());
+    socket.on("disconnect", () => {
+        latestSyncRequest += 1;
+        clearSocketAwareness();
+    });
 }
 
 export {

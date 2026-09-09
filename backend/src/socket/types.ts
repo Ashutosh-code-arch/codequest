@@ -10,6 +10,11 @@ export interface ChatMessagePayload {
     type: "message" | "system";
 }
 
+export interface YjsMessagePayload {
+    documentKey: string;
+    update: ArrayBuffer;
+}
+
 export interface ServerToClientEvents {
     "room:user-joined": (data: {
         user: { id: string; username: string };
@@ -25,7 +30,7 @@ export interface ServerToClientEvents {
     "timer:tick": (data: { secondsRemaining: number }) => void;
     "timer:sync": (data: { secondsRemaining: number }) => void;
     "room:time-up": () => void;
-    "yjs:message": (data: ArrayBuffer) => void;
+    "yjs:message": (data: YjsMessagePayload) => void;
     "language:changed": (data: { language: string }) => void;
     "room:existing-participants": (data: {
         participants: Array<{
@@ -46,7 +51,7 @@ export interface ClientToServerEvents {
     "room:join": (data: { roomId: string }) => void;
     "room:leave": (data: { roomId: string }) => void;
     "timer:sync-request": (data: { roomId: string }) => void;
-    "yjs:message": (data: ArrayBuffer) => void;
+    "yjs:message": (data: YjsMessagePayload) => void;
     "yjs:sync-request": (data?: { questionId?: string }) => void;
     "language:change": (data: { roomId: string; language: string }) => void;
     "chat:message": (data: { roomId: string; content: string }) => void;

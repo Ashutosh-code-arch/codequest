@@ -76,6 +76,7 @@ export default function Room() {
     const [ending, setEnding] = useState(false);
     const [isVideoOpen, setIsVideoOpen] = useState(false);
     const [socketDisconnected, setSocketDisconnected] = useState(false);
+    const [socketRoomReady, setSocketRoomReady] = useState(false);
     const codeRef = useRef<string>("");
 
     const { messages, unreadCount, sendMessage, sendError, markRead } = useChat({
@@ -94,7 +95,7 @@ export default function Room() {
         toggleVideo,
     } = useWebRTC({
         roomId: roomId ?? "",
-        enabled: isVideoOpen && roomLoaded,
+        enabled: isVideoOpen && roomLoaded && socketRoomReady,
     });
 
     // ── Step 1: Load room ─────────────────────────────────────────────────
@@ -177,6 +178,7 @@ export default function Room() {
             // Merge server list with what REST already gave us
             // Server list is authoritative — use it to replace
             setUsers(data.participants);
+            setSocketRoomReady(true);
             socket.emit("yjs:sync-request", {
                 questionId: selectedQuestionIdRef.current ?? undefined,
             });
@@ -262,6 +264,7 @@ export default function Room() {
 
         function onDisconnect() {
             setSocketDisconnected(true);
+            setSocketRoomReady(false);
         }
 
         socket.on("connect", onConnect);
@@ -359,7 +362,7 @@ export default function Room() {
                             </span>
                         </p>
                         <p className="text-xs text-gray-500">
-                            {room?.language}
+                            {language}
                         </p>
                     </div>
                 </div>
@@ -514,7 +517,6 @@ export default function Room() {
                             userId={user?.id ?? ""}
                             username={user?.username ?? ""}
                             language={language}
-                            onLanguageChange={setLanguage}
                             // onCodeChange={setCurrentCode}
                             codeRef={codeRef}
                             questionId={selectedQuestionId}
