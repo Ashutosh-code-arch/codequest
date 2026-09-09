@@ -1,6 +1,6 @@
 {
     "name": "codequest-backend",
-    "version": "1.0.3",
+    "version": "1.0.4",
     "private": true,
     "description": "API and realtime collaboration server for CodeQuest",
     "main": "dist/server.js",

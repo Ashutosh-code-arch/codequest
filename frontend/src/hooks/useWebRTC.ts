@@ -10,6 +10,8 @@ export interface RemoteStream {
     stream: MediaStream;
 }
 
+export type MediaStatus = "idle" | "requesting" | "ready" | "error";
+
 function getMediaErrorMessage(error: unknown): string {
     const name = error instanceof DOMException ? error.name : "";
     switch (name) {
@@ -46,6 +48,10 @@ export function useWebRTC({
     const [isMuted, setIsMuted] = useState(false);
     const [isVideoOff, setIsVideoOff] = useState(false);
     const [permError, setPermError] = useState("");
+    const [mediaWarning, setMediaWarning] = useState("");
+    const [connectionError, setConnectionError] = useState("");
+    const [mediaStatus, setMediaStatus] = useState<MediaStatus>("idle");
+    const [retryAttempt, setRetryAttempt] = useState(0);
 
     const createPC = useCallback(
         (
@@ -109,6 +115,18 @@ export function useWebRTC({
             };
 
             pc.onconnectionstatechange = () => {
+                // An offer can replace an older connection for the same peer.
+                // Ignore the old connection's delayed "closed" event so it
+                // cannot delete the replacement from the map.
+                if (peerConns.current.get(remoteSocketId) !== pc) return;
+                if (pc.connectionState === "connected") {
+                    setConnectionError("");
+                }
+                if (pc.connectionState === "failed") {
+                    setConnectionError(
+                        "A participant could not be reached. Check the TURN configuration or try reopening video.",
+                    );
+                }
                 if (
                     pc.connectionState === "failed" ||
                     pc.connectionState === "closed"
@@ -156,6 +174,7 @@ export function useWebRTC({
         function joinVideoRoom() {
             if (!active || !localStreamRef.current || !socket.connected) return;
             resetPeerConnections();
+            setConnectionError("");
             socket.emit("webrtc:join", { roomId });
         }
 
@@ -176,7 +195,9 @@ export function useWebRTC({
                 }
             } catch (error) {
                 console.error("Failed to connect to video peers", error);
-                setPermError("Could not establish the video connection.");
+                setConnectionError(
+                    "Could not establish the video connection. Try reopening video.",
+                );
             }
         }
 
@@ -222,7 +243,9 @@ export function useWebRTC({
                 }
             } catch (error) {
                 console.error("WebRTC signaling failed", error);
-                setPermError("Could not establish the video connection.");
+                setConnectionError(
+                    "Could not establish the video connection. Try reopening video.",
+                );
             }
         }
 
@@ -238,32 +261,67 @@ export function useWebRTC({
 
         async function init() {
             setPermError("");
+            setMediaWarning("");
+            setConnectionError("");
+            setMediaStatus("requesting");
             if (!navigator.mediaDevices?.getUserMedia) {
                 setPermError(
                     "Camera and microphone require HTTPS or localhost in a supported browser.",
                 );
+                setMediaStatus("error");
                 return;
             }
             try {
-                const stream = await navigator.mediaDevices.getUserMedia({
-                    video: { width: 640, height: 480, frameRate: 24 },
+                const constraints: MediaStreamConstraints = {
+                    video: {
+                        width: { ideal: 640 },
+                        height: { ideal: 480 },
+                        frameRate: { ideal: 24 },
+                    },
                     audio: true,
-                });
+                };
+                let stream: MediaStream;
+                let audioWarning = "";
+                try {
+                    stream = await navigator.mediaDevices.getUserMedia(
+                        constraints,
+                    );
+                } catch {
+                    // A missing, busy, or blocked microphone must not prevent the
+                    // camera preview and video-only participation from working.
+                    stream = await navigator.mediaDevices.getUserMedia({
+                        video: constraints.video,
+                        audio: false,
+                    });
+                    audioWarning =
+                        "Camera started, but the microphone is unavailable. You joined without audio.";
+                }
                 if (!active) {
                     stream.getTracks().forEach((t) => t.stop());
                     return;
+                }
+                const videoTrack = stream.getVideoTracks()[0];
+                if (!videoTrack || videoTrack.readyState !== "live") {
+                    stream.getTracks().forEach((track) => track.stop());
+                    throw new DOMException(
+                        "No live camera track was returned",
+                        "NotReadableError",
+                    );
                 }
                 localStreamRef.current = stream;
                 setLocalStream(stream);
                 setIsMuted(false);
                 setIsVideoOff(false);
-                stream.getVideoTracks()[0]?.addEventListener(
+                setMediaWarning(audioWarning);
+                setMediaStatus("ready");
+                videoTrack.addEventListener(
                     "ended",
                     () => {
                         if (active) {
                             setPermError(
                                 "Camera access stopped. Check browser and macOS camera permissions, then reopen video.",
                             );
+                            setMediaStatus("error");
                         }
                     },
                     { once: true },
@@ -271,6 +329,7 @@ export function useWebRTC({
             } catch (error) {
                 console.error("Camera/microphone access failed", error);
                 setPermError(getMediaErrorMessage(error));
+                setMediaStatus("error");
                 return;
             }
 
@@ -297,8 +356,9 @@ export function useWebRTC({
             setRemoteStreams([]);
             setIsMuted(false);
             setIsVideoOff(false);
+            setMediaStatus("idle");
         };
-    }, [roomId, enabled, createPC]);
+    }, [roomId, enabled, createPC, retryAttempt]);
 
     function toggleMute() {
         const track = localStreamRef.current?.getAudioTracks()[0];
@@ -314,13 +374,22 @@ export function useWebRTC({
         setIsVideoOff(!track.enabled);
     }
 
+    function retryMedia() {
+        setRetryAttempt((attempt) => attempt + 1);
+    }
+
     return {
         localStream,
         remoteStreams,
         isMuted,
         isVideoOff,
         permError,
+        mediaWarning,
+        connectionError,
+        mediaStatus,
+        hasAudio: (localStream?.getAudioTracks().length ?? 0) > 0,
         toggleMute,
         toggleVideo,
+        retryMedia,
     };
 }

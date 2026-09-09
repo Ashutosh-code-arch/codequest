@@ -146,6 +146,7 @@ Open `http://localhost:5173`.
 | `VITE_API_URL` | Yes in production | Backend HTTP origin |
 | `VITE_WS_URL` | Yes in production | Backend Socket.IO origin |
 | `VITE_TURN_URL` | Recommended | TURN server URL, for example `turn:host:3478` |
+| `VITE_TURN_URLS` | Recommended | Comma-separated TURN URLs; overrides `VITE_TURN_URL` and should include UDP, TCP, and TLS endpoints when available |
 | `VITE_TURN_USERNAME` | With TURN | TURN username |
 | `VITE_TURN_CREDENTIAL` | With TURN | TURN credential |
 

@@ -6,6 +6,7 @@ interface VideoTileProps {
     isMuted?: boolean;
     videoOff?: boolean;
     isLocal?: boolean;
+    placeholderText?: string;
 }
 
 export default function VideoTile({
@@ -14,6 +15,7 @@ export default function VideoTile({
     isMuted = false,
     videoOff = false,
     isLocal = false,
+    placeholderText,
 }: VideoTileProps) {
     const videoRef = useRef<HTMLVideoElement>(null);
     const [playbackBlocked, setPlaybackBlocked] = useState(false);
@@ -23,12 +25,31 @@ export default function VideoTile({
         if (!video || !stream) return;
 
         video.srcObject = stream;
-        void video
-            .play()
-            .then(() => setPlaybackBlocked(false))
-            .catch(() => setPlaybackBlocked(true));
+        function startPlayback() {
+            void video!
+                .play()
+                .then(() => setPlaybackBlocked(false))
+                .catch((error: unknown) => {
+                    // Setting srcObject can temporarily abort play before the
+                    // metadata event. Retry there instead of showing a false
+                    // autoplay error.
+                    if (
+                        error instanceof DOMException &&
+                        error.name === "AbortError"
+                    ) {
+                        return;
+                    }
+                    setPlaybackBlocked(true);
+                });
+        }
+
+        video.addEventListener("loadedmetadata", startPlayback);
+        video.addEventListener("canplay", startPlayback, { once: true });
+        startPlayback();
 
         return () => {
+            video.removeEventListener("loadedmetadata", startPlayback);
+            video.removeEventListener("canplay", startPlayback);
             if (video.srcObject === stream) video.srcObject = null;
         };
     }, [stream]);
@@ -64,6 +85,11 @@ export default function VideoTile({
                     {videoOff && (
                         <span className="text-xs text-gray-500">
                             Camera off
+                        </span>
+                    )}
+                    {!stream && !videoOff && placeholderText && (
+                        <span className="text-xs text-gray-500">
+                            {placeholderText}
                         </span>
                     )}
                 </div>

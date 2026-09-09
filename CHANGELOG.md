@@ -2,6 +2,22 @@
 
 All notable changes to CodeQuest are documented here.
 
+## [1.0.4] - 2026-09-09
+
+### Fixed
+
+- Run now reports a successful process as `Completed successfully` and clearly
+  directs users to Submit for solution correctness
+- Camera video can start without audio when the microphone is unavailable
+- Remote connection failures no longer replace a working local camera preview
+- Replaced WebRTC connections are protected from stale close events
+- Video playback retries after media metadata becomes available
+- Single-participant video uses the full grid instead of sharing it with empty
+  placeholders
+- TURN supports multiple endpoints and automatically tries TCP alongside UDP
+- Video status, connection guidance, and camera retry controls are visible in
+  the room
+
 ## [1.0.3] - 2026-09-09
 
 ### Fixed
@@ -56,6 +72,7 @@ All notable changes to CodeQuest are documented here.
 - Admin seeding is idempotent for the reserved administrator account
 - Authentication error responses and the current-user API path are consistent
 
+[1.0.4]: https://github.com/Ashutosh-code-arch/codequest/releases/tag/v1.0.4
 [1.0.3]: https://github.com/Ashutosh-code-arch/codequest/releases/tag/v1.0.3
 [1.0.2]: https://github.com/Ashutosh-code-arch/codequest/releases/tag/v1.0.2
 [1.0.1]: https://github.com/Ashutosh-code-arch/codequest/releases/tag/v1.0.1

@@ -345,8 +345,12 @@ export default function ExecutionPanel({
                                 placeholder="Optional — leave empty for no input"
                                 className="w-full bg-gray-800 border border-gray-700 text-gray-300 text-xs
                            font-mono rounded-lg px-3 py-2 outline-none resize-y
-                           focus:border-violet-500 placeholder-gray-600"
+                                focus:border-violet-500 placeholder-gray-600"
                             />
+                            <p className="mt-1.5 text-xs text-gray-600">
+                                Run executes this input only. Use Submit to check
+                                your solution against the problem test cases.
+                            </p>
                         </div>
 
                         {/* Run error */}
@@ -361,7 +365,7 @@ export default function ExecutionPanel({
                             <div className="space-y-2">
                                 <div className="flex items-center gap-2">
                                     <span className="text-xs text-gray-500">
-                                        Status:
+                                        Execution status:
                                     </span>
                                     <span
                                         className={`text-xs font-medium ${
@@ -370,7 +374,9 @@ export default function ExecutionPanel({
                                                 : "text-amber-400"
                                         }`}
                                     >
-                                        {runResult.status}
+                                        {runResult.status === "Accepted"
+                                            ? "Completed successfully"
+                                            : runResult.status}
                                     </span>
                                     {runResult.executionMs !== null && (
                                         <span className="text-xs text-gray-600">

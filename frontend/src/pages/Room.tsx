@@ -91,8 +91,13 @@ export default function Room() {
         isMuted,
         isVideoOff,
         permError,
+        mediaWarning,
+        connectionError,
+        mediaStatus,
+        hasAudio,
         toggleMute,
         toggleVideo,
+        retryMedia,
     } = useWebRTC({
         roomId: roomId ?? "",
         enabled: isVideoOpen && roomLoaded && socketRoomReady,
@@ -500,8 +505,13 @@ export default function Room() {
                                 isVideoOff={isVideoOff}
                                 remoteStreams={remoteStreams}
                                 permError={permError}
+                                mediaWarning={mediaWarning}
+                                connectionError={connectionError}
+                                mediaStatus={mediaStatus}
+                                hasAudio={hasAudio}
                                 onToggleMute={toggleMute}
                                 onToggleVideo={toggleVideo}
+                                onRetry={retryMedia}
                             />
                         </div>
                     )}
